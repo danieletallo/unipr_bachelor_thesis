@@ -8,6 +8,8 @@ import requests
 import time
 
 BASE_URL = "http://localhost:5000"
+CHUNK_SIZE = 100  # numero di punti GPS per query OSRM
+MAXIMUM_RADIUS = 15
 
 ### MAIN
 if __name__ == '__main__':
@@ -15,119 +17,130 @@ if __name__ == '__main__':
     # -------- Carica e filtra dati GPS --------
     script_dir = os.path.dirname(os.path.abspath(__file__))
     csv_path = os.path.join(script_dir, 'cycle.csv')
+    pkl_path = os.path.join(script_dir, 'cycle.pkl')
 
-    print("Caricamento file CSV da:", csv_path)
-    df_all = pd.read_csv(csv_path, usecols=["ActivityId","Latitude","Longitude","Time"]).dropna(subset=["Latitude","Longitude"])
-    
-    print(f"Totale punti GPS letti: {len(df_all)}")
-    df_all['ParsedTime'] = pd.to_datetime(df_all['Time'], dayfirst=True, errors='coerce')
+    if os.path.exists(pkl_path):
+        print("Carico dataframe da pickle...")
+        df_all = pd.read_pickle(pkl_path)
+    else:
+        print("Carico dataframe da CSV...")
 
-    # -------- Scorro gli ActivityId e applico match() --------
+        df_all = (
+            pd.read_csv(csv_path, usecols=["ActivityId","Latitude","Longitude","Time"])
+            .dropna(subset=["Latitude","Longitude"])
+        )
+
+        df_all["UnixSec"] = pd.to_datetime(df_all["Time"], errors="coerce")
+        df_all = df_all.dropna(subset=["UnixSec"])
+        df_all["UnixSec"] = df_all["UnixSec"].astype("int64") // 10**9  # ns → s
+
+        df_all.to_pickle(pkl_path)   # salva pronto all’uso
+
     activity_ids = df_all['ActivityId'].unique()
     print(f"Totale ActivityId unici: {len(activity_ids)}")
-
-    matched_segments = []
 
     contatore = 0
     contatore_gps = 0
     contatore_gps_errati = 0
-    errors_match = 0
     counter_iterations = 0
 
-    chunk_per_query = 100
+    # crea lista con Longitude, Latitude, NewLongitude, NewLatitude
+    matched_coords = []
 
     timewatch = time.time()
-    for activity_id, rows_by_activity_id in df_all.groupby("ActivityId", sort=False):
-        xy = rows_by_activity_id[["Longitude", "Latitude"]].to_numpy()
+    with requests.Session() as sess:
+        for activity_id, rows_by_activity_id in df_all.groupby("ActivityId", sort=False):
+            xy = rows_by_activity_id[["Longitude", "Latitude"]].to_numpy()
 
-        if len(xy) >= 2:
+            contatore += 1
+            print("Attivita' n.", contatore)
             print(f"ActivityId {activity_id}: {len(xy)} punti GPS")
 
             # xy count > 100 -> split in piu' query
             # tramite for
-            for i in range(0, len(xy), chunk_per_query):
-                chunk = xy[i:i+chunk_per_query]
+            for i in range(0, len(xy), CHUNK_SIZE):
+                chunk = xy[i:i+CHUNK_SIZE]
                 coords = ";".join([f"{lon},{lat}" for lon, lat in chunk])
-                chunk_times = rows_by_activity_id["ParsedTime"].iloc[i:i+chunk_per_query]
+                chunk_times = rows_by_activity_id["UnixSec"].iloc[i:i+CHUNK_SIZE]
+                chunk_times_raw = rows_by_activity_id["Time"].iloc[i:i+CHUNK_SIZE]  # <- NEW
 
                 print(f"  Query OSRM con {len(chunk)} punti GPS")
-                # Query OSRM server
-                # try:
-                #     counter_iterations += 1
-                #     r = requests.get(
-                #         f"{BASE_URL}/match/v1/bicycle/{coords}",
-                #         params={
-                #             "steps": "false",
-                #             "geometries": "geojson",
-                #             "overview": "full",
-                #             "annotations": "true",
-                #             "timestamps": ";".join(
-                #                 (chunk_times.astype("int64") // 10**9).astype(str).tolist()
-                #             )#,
-                #             #"radiuses": ";".join(["10"] * len(chunk))  ## aggiunto alla fine
-                #         }
-                #     )
 
-                #     r.raise_for_status()
-                #     data = r.json()
-
-                # except:
-                #     errors_match += 1
-                #     contatore_gps_errati += len(chunk)
-                #     print("\033[91m" + r.text + "\033[0m")
-
+                data = {"tracepoints": []} 
                 try:
                     counter_iterations += 1
 
                     # tentativi con radius crescente SOLO se fallisce
-                    for rad in [None, 10, 15]:
+                    for radius in [None] + list(range(10, MAXIMUM_RADIUS + 1, 5)):
                         params = {
                             "steps": "false",
                             "geometries": "geojson",
                             "overview": "full",
                             "annotations": "true",
-                            "timestamps": ";".join(
-                                (chunk_times.astype("int64") // 10**9).astype(str).tolist()
-                            )
+                            "timestamps": ";".join(chunk_times.astype(str).tolist())
                         }
-                        if rad is not None:
-                            params["radiuses"] = ";".join([str(rad)] * len(chunk))
+                        if radius is not None:
+                            params["radiuses"] = ";".join([str(radius)] * len(chunk))
 
-                        r = requests.get(f"{BASE_URL}/match/v1/bicycle/{coords}", params=params)
+                        r = sess.get(f"{BASE_URL}/match/v1/bicycle/{coords}", params=params)
 
                         if r.ok:
                             data = r.json()
+                            
+                            # se ho errori sul match oppure tracepoints None, riprova con radius più grande
+                            if (
+                                data.get("code") == "NoSegment" or data.get("code") == "NoMatch" 
+                                or (data.get("code") == "Ok" and any(tp is None for tp in data.get("tracepoints", [])))
+                            ):
+                                if radius != MAXIMUM_RADIUS:
+                                    continue  # prova con radius più grande
+
                             if data.get("code") == "Ok":
                                 break  # successo: esci dal loop
-                            if data.get("code") == "NoSegment":
-                                continue  # prova con radius più grande
+
                             # altri codici -> non insistere col radius
                             break
                         else:
-                            # HTTP error: se 400 NoSegment, riprova; altrimenti esci
+                            # HTTP error: se 400 NoSegment o NoMatch, riprova; altrimenti esci
                             try:
                                 j = r.json()
-                                if j.get("code") == "NoSegment":
+                                if j.get("code") == "NoSegment" or j.get("code") == "NoMatch":
                                     continue
                             except Exception:
                                 pass
                             break
                     else:
                         # se esci dal for senza break: tutti i tentativi falliti
-                        errors_match += 1
-                        contatore_gps_errati += len(chunk)
-                        print("\033[91m" + r.text + "\033[0m")
+                        if (data.get("code") == "Ok" and any(tp is None for tp in data.get("tracepoints", []))):
+                            print("  -> Ci sono tracepoints che sono None")
+                        else:
+                            print("\033[91m" + r.text + "\033[0m")
 
                 except Exception:
-                    errors_match += 1
-                    contatore_gps_errati += len(chunk)
-                    print("\033[91m" + "Errore di rete/altro durante la richiesta" + "\033[0m")
+                    print("ECCEZIONE!")
 
-            contatore += 1
+                finally:
+                    tps = data.get("tracepoints", [])
+
+                    for idx, (old_lon, old_lat) in enumerate(chunk):
+                        if idx >= len(tps) or tps[idx] is None:
+                            contatore_gps_errati += 1
+                            new_loc = None
+                        else:
+                            new_loc = tps[idx].get("location")
+
+                        matched_coords.append({
+                            "ActivityId": int(activity_id),
+                            "Time": str(chunk_times_raw.iloc[idx]),
+                            "OLD_Latitude": float(old_lat),
+                            "OLD_Longitude": float(old_lon),
+                            "NEW_Latitude": None if new_loc is None else float(new_loc[1]),
+                            "NEW_Longitude": None if new_loc is None else float(new_loc[0])
+                        })
+
             contatore_gps += len(xy)
-            print("Attivita' n.", contatore)
 
-            if contatore == 100 :
+            if contatore == 300 :
                 break
 
     print("Contatore:", contatore)
@@ -137,12 +150,12 @@ if __name__ == '__main__':
     print("Tempo medio per punto GPS:", (time.time() - timewatch) / contatore_gps)
 
     print("Tempo stimato su 78 milioni punti GPS:", (time.time() - timewatch) / contatore_gps * 78000000 / 3600, "ore")
-    print("Errori match:", errors_match, " su", counter_iterations, "iterazioni")
 
+    pd.DataFrame(matched_coords, columns=["ActivityId","Time","OLD_Latitude","OLD_Longitude","NEW_Latitude","NEW_Longitude"]).to_csv("matched_coords.csv", index=False)
 
 
 ## TODO
-## - Verificare output OSRM API /match call
-## - Associare ad ogni punto originale la nuova coordinata matched
-## - Salvare su file CSV i risultati
-## - Valutare, nuovamente, tempi di esecuzione. In data 05-09-2025, il tempo stimato era 8.55 ore (stimato elaborando 800k su 80M)
+## OK - Verificare output OSRM API /match call
+## OK - Associare ad ogni punto originale la nuova coordinata matched
+## OK - Salvare su file CSV i risultati
+## OK - Valutare, nuovamente, tempi di esecuzione. In data 05-09-2025, il tempo stimato era 8.55 ore (stimato elaborando 800k su 80M)
