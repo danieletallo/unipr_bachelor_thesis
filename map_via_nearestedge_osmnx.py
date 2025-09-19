@@ -6,7 +6,7 @@ import numpy as np
 import os
 
 
-
+# Elabora un segmento GPS associato a un edge e restituisce un dizionario con i dati calcolati
 def process_segment(G, activity_id, edge, gps_segment, time_segment):
     """
     Elabora un segmento GPS associato a un edge e restituisce un dizionario con i dati calcolati.
@@ -38,6 +38,7 @@ def process_segment(G, activity_id, edge, gps_segment, time_segment):
         'TimeFrom': t0, 'TimeTo': t1
     }
 
+# Calcola la distanza totale di una lista di punti (lat, lon)
 def segment_distance(gps_segment):
     """Calcola la distanza totale (metri) di una lista di punti (lat, lon)"""
     if len(gps_segment) < 2:
@@ -47,10 +48,13 @@ def segment_distance(gps_segment):
         d += ox.distance.great_circle(lat1, lon1, lat2, lon2)
     return d
 
+# Restituisce il vettore normalizzato
 def get_direction(vec):
     norm = np.linalg.norm(vec)
     return np.array(vec) / norm if norm > 0 else np.array([0, 0])
 
+# Controlla se il segmento GPS e l'arco OSM hanno la stessa direzione
+# Utile per verificare la legalità del senso di marcia
 def is_same_direction(edge_geom, gps_segment, u, v, G):
     # semplificato ma identico alla logica precedente
     geom_start, geom_end = edge_geom.coords[0], edge_geom.coords[-1]
@@ -66,6 +70,7 @@ def is_same_direction(edge_geom, gps_segment, u, v, G):
     gps_vec = [G1[1] - G0[1], G1[0] - G0[0]]
     return np.dot(get_direction(edge_vec), get_direction(gps_vec)) > 0.5
 
+# Controlla se l'arco è legale per la bici
 def check_legality(edge_data, gps_segment, u, v, G):
     # Controlla se il segmento ha una pista ciclabile (cioè se uno dei tag è presente e valorizzato)
     has_cycleway = any(edge_data.get(tag) not in [None, '', 'no'] for tag in ["cycleway", "cycleway:right", "cycleway:left", "cycleway:both"])
@@ -91,54 +96,45 @@ def check_legality(edge_data, gps_segment, u, v, G):
 
     return legal, has_cycleway
 
-def edge_n_nodes(edge_data):
-    geom = edge_data.get("geometry")
-    return len(geom.coords) if isinstance(geom, LineString) else 2
-
-def parse_time(t):
-    try:
-        return pd.to_datetime(t, format="%d/%m/%Y %H:%M:%S")
-    except Exception:
-        return pd.to_datetime(t, errors='coerce')
 
 
-
+###
+###
 ### MAIN
 if __name__ == '__main__':
     # -------- Carica e filtra dati GPS --------
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    csv_path = os.path.join(script_dir, 'cycle.csv')
+    csv_path = os.path.join(script_dir, 'matched_coords.csv')
     print("Caricamento file CSV da:", csv_path)
-    df_all = pd.read_csv(csv_path, usecols=["ActivityId","Latitude","Longitude","Time"]).dropna(subset=["Latitude","Longitude"])
+    df_all = pd.read_csv(csv_path, usecols=["ActivityId","NEW_Latitude","NEW_Longitude","Time"]).dropna(subset=["NEW_Latitude","NEW_Longitude"])
     print(f"Totale punti GPS letti: {len(df_all)}")
     df_all['ParsedTime'] = pd.to_datetime(df_all['Time'], dayfirst=True, errors='coerce')
 
-    # -------- Carica la rete OSM dal PBF storico (Geofabrik Nord-Est 2018) --------   [[[NEW]]]
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)...")
-    minx, miny, maxx, maxy = 10.90, 44.30, 11.55, 44.85   # circa le coordinate di Bologna
-    pbf_path = os.path.join(script_dir, "nord-est-180101.osm.pbf")  # metti il file qui accanto allo script
+    # -------- Carica la rete OSM dal PBF storico (Geofabrik Bologna 2018) -------- 
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)...")
+    pbf_path = os.path.join(script_dir, "osrm", "bologna-2018.osm.pbf")  # metti il file qui accanto allo script
 
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 2")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 2")
     if not os.path.exists(pbf_path):
         raise FileNotFoundError(f"PBF non trovato: {pbf_path}")
 
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 3")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 3")
     # Leggi rete 'cycling' con Pyrosm
-    osm = OSM(pbf_path, bounding_box=[minx, miny, maxx, maxy])    
+    osm = OSM(pbf_path)    
 
     # Tag essenziali per ciclabilità: riduci gli attributi per risparmiare memoria
     extra_attrs = ["oneway", "highway",  "cycleway", "bicycle"]
 
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 4")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 4")
 
-    # --- DOPO ---
+    # ----------- CARICA NODES ED EDGES ----------
     nodes, edges = osm.get_network(
         network_type="cycling",
         extra_attributes=extra_attrs,
         nodes=True
     )
 
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 5")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 5")
 
     # ---------- NORMALIZZA NODES ----------
     nodes = nodes.rename(columns={'id': 'osmid'})
@@ -174,15 +170,15 @@ if __name__ == '__main__':
     # imposta MultiIndex richiesto (u, v, key)
     edges = edges.set_index(['u','v','key']).sort_index()
 
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 5.1")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 5.1")
 
     # Crea MultiDiGraph compatibile con OSMnx e semplifica
     G = ox.graph_from_gdfs(nodes, edges)
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 6")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 6")
     G = ox.simplify_graph(G)
 
     # assicurati di avere la lunghezza degli archi in metri
-    print("Carico grafo OSM dal PBF storico (Nord-Est 2018)... -- 7")
+    print("Carico grafo OSM dal PBF storico (Bologna 2018)... -- 7")
     ox.distance.add_edge_lengths(G)
 
     print(f"Grafo caricato dal PBF: {len(G.nodes)} nodi, {len(G.edges)} archi")
@@ -190,8 +186,8 @@ if __name__ == '__main__':
 
     # -------- CALCOLO VETTORIALE nearest_edges UNA SOLA VOLTA --------
     print("Inizio calcolo nearest_edges per tutti i punti...")
-    xs = df_all['Longitude'].values
-    ys = df_all['Latitude'].values
+    xs = df_all['NEW_Longitude'].values
+    ys = df_all['NEW_Latitude'].values
     print(f"Calcolo nearest_edges per {len(xs)} punti...")
     # Split xs and ys to avoid memory issues with large datasets
     if len(xs) > 1000000:
@@ -221,7 +217,7 @@ if __name__ == '__main__':
         num_activity_counter += 1
         print(f"\nElaborazione ActivityId {activity_id} ({num_activity_counter}/{num_activities}) con {len(df)} punti GPS...")
         # df = df.sort_values('ParsedTime')
-        gps = list(zip(df['Latitude'], df['Longitude']))
+        gps = list(zip(df['NEW_Latitude'], df['NEW_Longitude']))
         times = list(df['ParsedTime'])
         nes   = df['NearestEdge'].tolist()
         last = None

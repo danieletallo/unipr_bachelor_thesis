@@ -39,6 +39,26 @@ if __name__ == '__main__':
     activity_ids = df_all['ActivityId'].unique()
     print(f"Totale ActivityId unici: {len(activity_ids)}")
 
+    # Controlla se esiste già un file matched_coords.csv per riprendere da dove si era fermato
+    matched_coords_file = os.path.join(script_dir, 'matched_coords.csv')
+    last_processed_activity_id = None
+    
+    if os.path.exists(matched_coords_file):
+        print("File matched_coords.csv trovato. Cerco l'ultimo ActivityId processato...")
+        try:
+            existing_df = pd.read_csv(matched_coords_file)
+            if not existing_df.empty:
+                last_processed_activity_id = existing_df['ActivityId'].max()
+                print(f"Ultimo ActivityId processato: {last_processed_activity_id}")
+        except Exception as e:
+            print(f"Errore nel leggere il file esistente: {e}")
+            print("Ripartirò dall'inizio...")
+    
+    # Filtra gli ActivityId per processare solo quelli successivi all'ultimo processato
+    if last_processed_activity_id is not None:
+        activity_ids = activity_ids[activity_ids > last_processed_activity_id]
+        print(f"ActivityId rimanenti da processare: {len(activity_ids)}")
+    
     contatore = 0
     contatore_gps = 0
     contatore_gps_errati = 0
@@ -46,10 +66,20 @@ if __name__ == '__main__':
 
     # crea lista con Longitude, Latitude, NewLongitude, NewLatitude
     matched_coords = []
+    
+    # Contatore per il salvataggio in append ogni 10000 ActivityId
+    save_interval = 10000
+    last_save_count = 0
 
     timewatch = time.time()
     with requests.Session() as sess:
-        for activity_id, rows_by_activity_id in df_all.groupby("ActivityId", sort=False):
+        # Filtra il dataframe per processare solo gli ActivityId rimanenti
+        if last_processed_activity_id is not None:
+            df_filtered = df_all[df_all['ActivityId'] > last_processed_activity_id]
+        else:
+            df_filtered = df_all
+            
+        for activity_id, rows_by_activity_id in df_filtered.groupby("ActivityId", sort=False):
             xy = rows_by_activity_id[["Longitude", "Latitude"]].to_numpy()
 
             contatore += 1
@@ -64,7 +94,7 @@ if __name__ == '__main__':
                 chunk_times = rows_by_activity_id["UnixSec"].iloc[i:i+CHUNK_SIZE]
                 chunk_times_raw = rows_by_activity_id["Time"].iloc[i:i+CHUNK_SIZE]  # <- NEW
 
-                print(f"  Query OSRM con {len(chunk)} punti GPS")
+                #print(f"  Query OSRM con {len(chunk)} punti GPS")
 
                 data = {"tracepoints": []} 
                 try:
@@ -139,19 +169,51 @@ if __name__ == '__main__':
                         })
 
             contatore_gps += len(xy)
-
-            if contatore == 300 :
-                break
+            
+            # Salvataggio periodico ogni 10000 ActivityId
+            if contatore - last_save_count >= save_interval:
+                print(f"\n--- Salvataggio intermedio dopo {contatore} ActivityId ---")
+                if matched_coords:
+                    df_temp = pd.DataFrame(matched_coords, columns=["ActivityId","Time","OLD_Latitude","OLD_Longitude","NEW_Latitude","NEW_Longitude"])
+                    
+                    # Se il file esiste, append, altrimenti crea nuovo
+                    if os.path.exists(matched_coords_file):
+                        df_temp.to_csv(matched_coords_file, mode='a', header=False, index=False)
+                        print(f"Dati aggiunti al file esistente: {len(matched_coords)} righe")
+                    else:
+                        df_temp.to_csv(matched_coords_file, index=False)
+                        print(f"File creato con {len(matched_coords)} righe")
+                    
+                    # Svuota la lista per risparmiare memoria
+                    matched_coords = []
+                    last_save_count = contatore
+                    print(f"Memoria liberata. Prossimo salvataggio tra {save_interval} ActivityId")
+                print("--- Fine salvataggio intermedio ---\n")
 
     print("Contatore:", contatore)
     print("Contatore punti GPS in errore:", contatore_gps_errati, " / ", contatore_gps)
     print("Tempo impiegato:", time.time() - timewatch)
-    print("Tempo medio per ActivityId:", (time.time() - timewatch) / contatore)
-    print("Tempo medio per punto GPS:", (time.time() - timewatch) / contatore_gps)
+    if contatore > 0:
+        print("Tempo medio per ActivityId:", (time.time() - timewatch) / contatore)
+    if contatore_gps > 0:
+        print("Tempo medio per punto GPS:", (time.time() - timewatch) / contatore_gps)
+        print("Tempo stimato su 78 milioni punti GPS:", (time.time() - timewatch) / contatore_gps * 78000000 / 3600, "ore")
 
-    print("Tempo stimato su 78 milioni punti GPS:", (time.time() - timewatch) / contatore_gps * 78000000 / 3600, "ore")
-
-    pd.DataFrame(matched_coords, columns=["ActivityId","Time","OLD_Latitude","OLD_Longitude","NEW_Latitude","NEW_Longitude"]).to_csv("matched_coords.csv", index=False)
+    # Salvataggio finale dei dati rimanenti
+    if matched_coords:
+        print(f"\n--- Salvataggio finale di {len(matched_coords)} righe rimanenti ---")
+        df_final = pd.DataFrame(matched_coords, columns=["ActivityId","Time","OLD_Latitude","OLD_Longitude","NEW_Latitude","NEW_Longitude"])
+        
+        # Se il file esiste, append, altrimenti crea nuovo
+        if os.path.exists(matched_coords_file):
+            df_final.to_csv(matched_coords_file, mode='a', header=False, index=False)
+            print("Dati finali aggiunti al file esistente")
+        else:
+            df_final.to_csv(matched_coords_file, index=False)
+            print("File finale creato")
+        print("--- Salvataggio completato ---")
+    
+    print(f"\nTutti i dati salvati in: {matched_coords_file}")
 
 
 ## TODO
