@@ -1,0 +1,59 @@
+# Ordine scripts .py lanciati:
+
+1 - dataset_scraper.py:
+    -> utilizzato per filtrare solo le righe di tipo 'Cycle' dai vari .csv
+
+    <-- Output: cycle.csv
+     
+
+2 - map_matching_via_OSRM.py:
+    -> map matching tramite Open Source Routing Machine per avere i punti matchati correttamente,
+	   scartando gli opportuni outliers
+ 
+    <-- Output: matched_coords.csv (coordinate matchate tramite OSRM)
+
+3 - map_via_nearestedge_osmnx.py:
+    -> calcolo, partendo dai punti matchati, dei vari segmenti attraversati e dei tempi stimati di percorrenza sui vari archi
+	   mettendo in output:
+	    'ActivityId'          -> id dell'attività 
+		'IsLegal'             -> se la direzione del segmento rispecchia il codice della strada 
+		'HasCycleway'         -> se l'arco possiede una pista ciclabile
+		'NomeVia'             -> nome via 
+		'Nodo_Da'             -> nodo da (dell'arco)
+		'Nodo_A'              -> nodo a (dell'arco)
+        'PercentualePercorsa' -> 'DistanzaPercorsa_m' / 'LunghezzaEdge_m' * 100
+		'DistanzaPercorsa_m'  -> distanza in metri effettivamente percorsa
+		'LunghezzaEdge_m'     -> lunghezza dell'arco
+		'TempoAtteso_s'       -> ('TimeTo' - 'TimeFrom') / PercentualePercorsa * 100
+        'TimeFrom'            -> primo tempo registrato sull'arco
+		'TimeTo'              -> ultimo tempo registrato sull'arco
+   
+    <-- Output: segments_all_activities.csv (segmenti con tempi stimati, etc..)
+		
+4 - most_frequent_paths_finder.py:
+    -> diviso la mappa delle coordinate in celle 750m x 750m e cercato i top percorsi tra archi di box diversi:
+	   notato come 3 tra i top siano tra UNI e Stazione o tra UNI e Piazza Maggiore.
+
+    <-- Output: top_cell_pairs_arc_favorites_directed.csv (top 3 percorsi per ogni top pair dei 5)
+                grid_top_cells.html (divisione in celle)
+	   
+5 - highlight_top3_pairs.py:
+    -> mostrato sulla mappa i 3 percorsi scelti (verde = sorgente, rosso = destinazione);
+	   da questi cercheremo i percorsi veri più utilizzati e lo confronteremo con quello migliore secondo Dijkstra.
+
+    <-- Output: top3_pairs.html (rappresentazione grafica top 3 percorsi)
+	   
+6 - filter_top3_paths.py:
+    -> preso i 3 percorsi precedentemente trovati e filtrato dal csv solo quelle attività in modo da avere una visualizzazione sulla mappa
+
+    <-- Output: filtered_activities_top3_paths.csv (activities prese da matched_coords.csv che corrispondono a quelle)
+	
+
+7 - plot_paths.py:
+    -> creo un file .html per ogni TOP PATH per vedere a grandi linee i percorsi
+
+    <-- Output: plot_path_<num>_ALL.html
+
+
+# TODO:
+

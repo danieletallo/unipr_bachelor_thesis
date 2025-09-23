@@ -108,7 +108,11 @@ if __name__ == '__main__':
     print("Caricamento file CSV da:", csv_path)
     df_all = pd.read_csv(csv_path, usecols=["ActivityId","NEW_Latitude","NEW_Longitude","Time"]).dropna(subset=["NEW_Latitude","NEW_Longitude"])
     print(f"Totale punti GPS letti: {len(df_all)}")
-    df_all['ParsedTime'] = pd.to_datetime(df_all['Time'], dayfirst=True, errors='coerce')
+    df_all["ParsedTime"] = pd.to_datetime(
+        df_all["Time"],
+        format="%Y-%m-%d %H:%M:%S",
+        errors="coerce"
+    )
 
     # -------- Carica la rete OSM dal PBF storico (Geofabrik Bologna 2018) -------- 
     print("Carico grafo OSM dal PBF storico (Bologna 2018)...")
@@ -247,5 +251,5 @@ if __name__ == '__main__':
 
     # -------- Esporta --------
     out = pd.DataFrame(all_segments)
-    out.to_csv(os.path.join(script_dir,'segments_all_activities_NEW_LAST.csv'),index=False)
-    print(f"Esportato 'segments_all_activities_NEW_LAST.csv' con {len(all_segments)} segmenti.")
+    out.to_csv(os.path.join(script_dir,'segments_all_activities.csv'),index=False)
+    print(f"Esportato 'segments_all_activities.csv' con {len(all_segments)} segmenti.")

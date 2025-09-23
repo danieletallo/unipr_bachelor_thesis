@@ -1,4 +1,3 @@
-# pip install pyosmium folium
 import osmium as osm
 import folium
 from folium.plugins import PolyLineTextPath
@@ -27,10 +26,6 @@ h = NodeGrabber(want_ids)
 h.apply_file(PBF_FILE, locations=True)
 coords = h.coords
 
-missing = want_ids - set(coords)
-if missing:
-    raise ValueError(f"Nodi mancanti nel PBF 2018: {sorted(missing)}")
-
 def midpoint(a, b):
     lat1, lon1 = coords[a]
     lat2, lon2 = coords[b]
@@ -41,7 +36,7 @@ src_mids = [midpoint(a, b) for a, b, _, _ in TOP3]
 center_lat = sum(lat for lat, _ in src_mids) / len(src_mids)
 center_lon = sum(lon for _, lon in src_mids) / len(src_mids)
 
-# basemap: OSM standard (va benissimo anche se i dati di sfondo non sono "2018")
+# basemap: OSM standard
 m = folium.Map(location=[center_lat, center_lon], zoom_start=13)
 
 for i, (s_from, s_to, d_from, d_to) in enumerate(TOP3, start=1):
@@ -56,9 +51,6 @@ for i, (s_from, s_to, d_from, d_to) in enumerate(TOP3, start=1):
 
     # freccia dal midpoint sorgente a quello destinazione
     line = folium.PolyLine([src_mid, dst_mid], weight=3, opacity=0.9).add_to(m)
-    # do a single row between the two points
-    PolyLineTextPath(line, " ", repeat=False, offset=7,
-                     attributes={"font-weight": "bold", "font-size": "18"}).add_to(m)
 
 m.save("top3_pairs.html")
 print("Mappa salvata: top3_pairs.html")

@@ -90,9 +90,9 @@ m.save(OUTPUT_HTML)
 grid_wgs84.to_file(OUTPUT_GRID_GEOJSON, driver="GeoJSON")
 
 # 7) Archi più frequenti tra coppie di celle TOP (direzionali A->B) ===
-SEGMENTS_CSV = "segments_all_activities.csv"   # deve avere: ActivityId, Nodo_Da, Nodo_A (TimeFrom/TimeTo se ci sono)
+SEGMENTS_CSV = "segments_all_activities.csv"   # ActivityId, Nodo_Da, Nodo_A
 OUTPUT_TOP_ARCS = "top_cell_pairs_arc_favorites_directed.csv"
-TOP_PER_PAIR = 3  # quanti corridoi arco-src -> arco-dst tenere per coppia A->B
+TOP_PER_PAIR = 3  # quanti percorsi per ogni pair di celle TOP
 
 # a) ricostruisco assegnazione cella (con ActivityId) per origini e destinazioni
 g_orig_id = gpd.GeoDataFrame(
@@ -155,7 +155,7 @@ if rows:
     agg = agg.sort_values(["src_cell","dst_cell","count"], ascending=[True, True, False])
     top_corridors = agg.groupby(["src_cell","dst_cell"], group_keys=False).head(TOP_PER_PAIR).reset_index(drop=True)
 
-    # opzionale: aggiungo i rank delle celle (1..K) per leggibilità
+    # aggiungo i rank delle celle (1..K) per leggibilità
     cell2rank = dict(zip(top["cell_id"], top["rank"]))
     top_corridors["src_rank"] = top_corridors["src_cell"].map(cell2rank)
     top_corridors["dst_rank"] = top_corridors["dst_cell"].map(cell2rank)
