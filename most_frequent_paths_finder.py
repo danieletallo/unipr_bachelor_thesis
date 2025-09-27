@@ -147,22 +147,22 @@ for a in sorted(top_cells):
                 "ActivityId": act
             })
 
-# d) aggrego e tengo i TOP_PER_PAIR corridoi per coppia A->B
+# d) aggrego e tengo i TOP_PER_PAIR percorsi per coppia A->B
 if rows:
     dfp = pd.DataFrame(rows)
     agg = (dfp.groupby(["src_cell","dst_cell","node_src_from","node_src_to","node_dst_from","node_dst_to"], as_index=False)
                .size().rename(columns={"size":"count"}))
     agg = agg.sort_values(["src_cell","dst_cell","count"], ascending=[True, True, False])
-    top_corridors = agg.groupby(["src_cell","dst_cell"], group_keys=False).head(TOP_PER_PAIR).reset_index(drop=True)
+    top_paths = agg.groupby(["src_cell","dst_cell"], group_keys=False).head(TOP_PER_PAIR).reset_index(drop=True)
 
     # aggiungo i rank delle celle (1..K) per leggibilità
     cell2rank = dict(zip(top["cell_id"], top["rank"]))
-    top_corridors["src_rank"] = top_corridors["src_cell"].map(cell2rank)
-    top_corridors["dst_rank"] = top_corridors["dst_cell"].map(cell2rank)
+    top_paths["src_rank"] = top_paths["src_cell"].map(cell2rank)
+    top_paths["dst_rank"] = top_paths["dst_cell"].map(cell2rank)
 
     # salvo
     cols = ["src_cell","dst_cell","src_rank","dst_rank","node_src_from","node_src_to","node_dst_from","node_dst_to","count"]
-    top_corridors[cols].to_csv(OUTPUT_TOP_ARCS, index=False)
-    print(f">>> 7) Salvato: {OUTPUT_TOP_ARCS} ({len(top_corridors)} righe)")
+    top_paths[cols].to_csv(OUTPUT_TOP_ARCS, index=False)
+    print(f">>> 7) Salvato: {OUTPUT_TOP_ARCS} ({len(top_paths)} righe)")
 else:
     print(">>> 7) Nessuna attività trovata tra coppie TOP (controlla i dati).")

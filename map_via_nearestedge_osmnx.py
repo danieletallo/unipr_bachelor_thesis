@@ -56,7 +56,6 @@ def get_direction(vec):
 # Controlla se il segmento GPS e l'arco OSM hanno la stessa direzione
 # Utile per verificare la legalità del senso di marcia
 def is_same_direction(edge_geom, gps_segment, u, v, G):
-    # semplificato ma identico alla logica precedente
     geom_start, geom_end = edge_geom.coords[0], edge_geom.coords[-1]
     u_latlon = (G.nodes[u]["y"], G.nodes[u]["x"])
     v_latlon = (G.nodes[v]["y"], G.nodes[v]["x"])
