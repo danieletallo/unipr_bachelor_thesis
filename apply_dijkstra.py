@@ -15,8 +15,10 @@ print(">>> Grafo caricato da grafo.graphml")
 
 # Applico Dijkstra tra due nodi di esempio
 # Da 250735019,390032680 a 251897634,341927978
-start_node = 390032680
-end_node = 251897634
+# Applicando i 4 percorsi possibili, ovvero da u_orig a u_dest, da u_orig a v_dest, da v_orig a u_dest, da v_orig a v_dest
+
+start_node = 567074443   # 250735019,390032680
+end_node = 297798839     #251897634,341927978
 print(f">>> Calcolo percorso Dijkstra da {start_node} a {end_node}...")
 try:
     path = nx.dijkstra_path(graph, start_node, end_node, weight='weight')
@@ -25,26 +27,3 @@ try:
     print(f"Percorso (nodi): {path}")
 except nx.NetworkXNoPath:
     print("Nessun percorso trovato tra i nodi specificati.")
-    
-    
-    
-# Nodo da controllare
-u, v = 3942996530, 251845761
-attrs_to_check = ["oneway", "highway", "cycleway", "bicycle"]
-
-if graph.has_edge(u, v):
-    for k, data in graph[u][v].items():
-        print(f"\nArco {u} -> {v}, key={k}")
-        for attr in attrs_to_check:
-            print(f"  {attr} = {data.get(attr)}")
-else:
-    print(f"Nessun arco {u} -> {v} trovato")
-
-# Verifico anche se esiste l'arco nell'altra direzione
-if graph.has_edge(v, u):
-    for k, data in graph[v][u].items():
-        print(f"\nArco {v} -> {u}, key={k}")
-        for attr in attrs_to_check:
-            print(f"  {attr} = {data.get(attr)}")
-else:
-    print(f"Nessun arco {v} -> {u} trovato")
