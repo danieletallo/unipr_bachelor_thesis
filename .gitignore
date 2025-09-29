@@ -1,2 +1,8 @@
-/cache
-/osrm
+# ignora tutto
+*
+
+# ma non le cartelle
+!*/
+
+# tieni i file .py
+!*.py

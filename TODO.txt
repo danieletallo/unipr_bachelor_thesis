@@ -55,5 +55,32 @@
     <-- Output: plot_path_<num>_ALL.html
 
 
-# TODO:
+
+####
+####
+#### TODO:
+
+1) quanto è efficiente l'utente rispetto a Dijkstra (Dijkstra farlo 1 volta, ma per ogni activity id devo vedere durata vera vs ottimale con Dijkstra)
+2) quanto rispetta il codice della strada -> evidenziare gli archi coinvolti
+
+3) su top 3 evidenziare i percorsi ottimali vs dijkstra
+e confrontarli.
+
+VELOCI:
+4) Analisi di quanto i ciclisti seguano il codice stradale (di tutto?)
+5) Esaminare i tipi di strada usati (di tutto?)
+
+6+) Esaminare quanti percorsi per mese e per orario?
+
+
+
+
+TODO AGGIUNTIVI NELLE COSE GIA' FATTI:
+1) SKIPPARE PRIMO E ULTIMO ARCO PERCORSO per Dijkstra perché a volte i ciclisti ci mettono tanto ad avviare e chiudere app e si raccolgono tanti punti lì
+P.S. nelle stime dei tempi attualmente ho rimosso le stime sui primi e ultimi archi percorsi causa "nuvole di punti".
+     quando però dovrò calcolare Dijkstra dovrò ovviamente considerare il primo e ultimo arco del percorso con l'accortezza di proporzionare il tempo stimato sulla percentuale di quei 2 archi percorsi altrimenti con Dijkstra andrei a considerare le strade di partenza e arrivo per intero anche se non totalmente percorsi.
+
+FATTO - 2) MEDIA PONDERATA INVECE CHE ARITMETICA cosi non devo skippare archi percorsi sotto una certa percentuale
+
+
 
