@@ -7,9 +7,12 @@ import osmnx as ox
 import networkx as nx
 from pyrosm import OSM
 import pandas as pd
+import geopandas as gpd
 import contextily as ctx
 import matplotlib.pyplot as plt
 from shapely import LineString
+from shapely.ops import substring
+from shapely.geometry import Point
 
 def normalize_nodes_and_edges(nodes, edges):
     # ---------- NORMALIZZA NODES ----------
@@ -66,7 +69,8 @@ def plot_graph_with_basemap(graph, filename):
     # Fissa uno zoom valido (p.es. 13 per Bologna)
     ctx.add_basemap(
         ax,
-        source=ctx.providers.CartoDB.Voyager,
+        # source=ctx.providers.CartoDB.Voyager,
+        source=ctx.providers.OpenStreetMap.Mapnik,
         zoom=13,
         attribution=True,
         reset_extent=False
@@ -184,7 +188,7 @@ def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
         if weight is not None:
             edge_weights[(u, v, key)] = weight
         else:
-            edge_weights[(u, v, key)] = float('inf')  # peso infinito se non trovato, default per Dijkstra
+            edge_weights[(u, v, key)] = -1  # peso -1 se non trovato
     
     # Aggiungo i pesi agli archi
     edges['weight'] = edges.index.map(edge_weights)
@@ -193,6 +197,7 @@ def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
     return edges
 
 #######################
+
 #######################
 
 
@@ -236,6 +241,8 @@ def main():
  
     # Assegno i pesi agli archi in base al file CSV   
     edges = assign_edge_weights(edges)
+    # Rimuovo archi senza peso (-1)
+    edges = edges[edges['weight'] >= 0].copy()
     
     # Esempio di arco con peso
     example_edge = edges[edges['weight'] < float('inf')].iloc[0]
@@ -253,13 +260,26 @@ def main():
         lambda row: (row['v'], row['u']) in edge_set, axis=1
     )
     
+    # Ricreo il grafo con gli attributi dentro
+    graph = ox.graph_from_gdfs(nodes, edges)
+    
+    # Salvo il grafo in formato GraphML
+    ox.save_graphml(graph, "grafo.graphml")
+    print(">>> Salvato: grafo.graphml")
+
     # Salvo il csv
     edges_df.to_csv("nodi_grafo.csv", index=False)
     print(">>> Salvato: nodi_grafo.csv")
 
     # Visualizzo grafo
-    plot_graph_with_basemap(graph, filename="dijkstra_graph.png")
-    print(">>> Salvato: dijkstra_graph.png")
+    # plot_graph_with_basemap(graph, filename="dijkstra_graph.png")
+    # print(">>> Salvato: dijkstra_graph.png")
+
+    # Mini plot del grafo attorno a un nodo di esempio
+    # edges è il tuo GeoDataFrame con index (u,v,key) e colonne 'geometry', 'weight'
+    # print(">>> Plot del grafo completo con frecce e pesi...")
+    # TODO
+
 
 
 if __name__ == "__main__":
