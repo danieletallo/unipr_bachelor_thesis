@@ -7,7 +7,7 @@ import pandas as pd
 output_file = "edges_with_estimated_times.csv"
 segments = pd.read_csv(
     "segments_all_activities.csv",
-    usecols=["ActivityId","IsLegal","Nodo_Da","Nodo_A","TempoAtteso_s","PercentualePercorsa", "LunghezzaEdge_m"]
+    usecols=["ActivityId","IsLegal","Nodo_Da","Nodo_A","Key","TempoAtteso_s","PercentualePercorsa", "LunghezzaEdge_m"]
 )
 
 print(f"Numero segmenti totali: {len(segments)}")
@@ -27,17 +27,20 @@ segments_cleaned = segments_cleaned[(segments_cleaned["IsLegal"])
 
 print(f"Numero segmenti legali: {len(segments_cleaned)}")
 
-# Faccio media ponderata per ogni arco (Nodo_Da, Nodo_A) unendo anche i pochi versi opposti
+# Faccio media ponderata per ogni arco (Nodo_Da, Nodo_A, Key) unendo anche i pochi versi opposti
 # Facendo nearest edge con osmnx e segmentando, mi sono ritrovato che alcuni archi sono stati considerati in entrambi i versi
 results = []
-for (u, v), segment in segments_cleaned.groupby([
-    segments_cleaned[["Nodo_Da", "Nodo_A"]].min(axis=1),
-    segments_cleaned[["Nodo_Da", "Nodo_A"]].max(axis=1)
-]):
+segments_cleaned = segments_cleaned.assign(
+    u_min=segments_cleaned[["Nodo_Da","Nodo_A"]].min(axis=1),
+    v_max=segments_cleaned[["Nodo_Da","Nodo_A"]].max(axis=1)
+)
+
+for (u, v, key), segment in segments_cleaned.groupby(["u_min", "v_max", "Key"]):
     weighted_avg = (segment["TempoAtteso_s"] * segment["PercentualePercorsa"]).sum() / segment["PercentualePercorsa"].sum()
     results.append({
         "Nodo_Da": u,
         "Nodo_A": v,
+        "Key": key,
         "TempoStimato_s": weighted_avg,
         "LunghezzaArco_m": segment["LunghezzaEdge_m"].iloc[0],
         "NumOsservazioni": len(segment),

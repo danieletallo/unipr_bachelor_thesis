@@ -171,18 +171,18 @@ def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
     Modifica il DataFrame edges aggiungendo la colonna 'weight'.
     """
     print(">>> Assegnazione pesi agli archi in base a edges_with_estimated_times.csv...")
-    weights_df = pd.read_csv(weights_csv, usecols=["Nodo_Da","Nodo_A","TempoStimato_s"])
-    weights_df = weights_df.rename(columns={"Nodo_Da": "u", "Nodo_A": "v", "TempoStimato_s": "weight"})
+    weights_df = pd.read_csv(weights_csv, usecols=["Nodo_Da","Nodo_A","Key", "TempoStimato_s"])
+    weights_df = weights_df.rename(columns={"Nodo_Da": "u", "Nodo_A": "v", "Key": "key", "TempoStimato_s": "weight"})
     weights_df = weights_df.dropna(subset=["u","v","weight"]).copy()
     
     # Scorro gli edges e assegno il peso se esiste in u, v o v, u
     edge_weights = {}
-    weight_set = set(zip(weights_df["u"], weights_df["v"], weights_df["weight"]))
+    weight_set = set(zip(weights_df["u"], weights_df["v"], weights_df["key"], weights_df["weight"]))
     for (u, v, key) in edges.index:
         # cerca peso in (u,v) o (v,u)
         weight = None
-        for (wu, wv, w) in weight_set:
-            if (u == wu and v == wv) or (u == wv and v == wu):
+        for (wu, wv, wk, w) in weight_set:
+            if (u == wu and v == wv and key == wk) or (u == wv and v == wu and key == wk):
                 weight = w
                 break
         if weight is not None:
@@ -250,14 +250,14 @@ def main():
     
     # Salvo in un csv i nodi u, v in ordine di osmid con informazione bidirezionalità
     print(">>> Salvo i nodi in nodi_grafo.csv...")
-    edges_df = edges.reset_index()[['u','v']].drop_duplicates().sort_values(['u','v'])
+    edges_df = edges.reset_index()[['u','v','key']].drop_duplicates().sort_values(['u','v','key']).copy()
     
     # Creo un set di tutte le coppie (u,v) per verificare rapidamente l'esistenza
-    edge_set = set(zip(edges_df['u'], edges_df['v']))
+    edge_set = set(zip(edges_df['u'], edges_df['v'], edges_df['key']))
     
     # Aggiungo la colonna bidirectional che indica se esiste anche (v,u)
     edges_df['bidirectional'] = edges_df.apply(
-        lambda row: (row['v'], row['u']) in edge_set, axis=1
+        lambda row: (row['v'], row['u'], row['key']) in edge_set, axis=1
     )
     
     # Ricreo il grafo con gli attributi dentro
@@ -270,15 +270,6 @@ def main():
     # Salvo il csv
     edges_df.to_csv("nodi_grafo.csv", index=False)
     print(">>> Salvato: nodi_grafo.csv")
-
-    # Visualizzo grafo
-    # plot_graph_with_basemap(graph, filename="dijkstra_graph.png")
-    # print(">>> Salvato: dijkstra_graph.png")
-
-    # Mini plot del grafo attorno a un nodo di esempio
-    # edges è il tuo GeoDataFrame con index (u,v,key) e colonne 'geometry', 'weight'
-    # print(">>> Plot del grafo completo con frecce e pesi...")
-    # TODO
 
 
 
