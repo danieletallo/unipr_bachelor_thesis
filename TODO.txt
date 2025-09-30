@@ -43,17 +43,18 @@
 
     <-- Output: top3_pairs.html (rappresentazione grafica top 3 percorsi)
 	   
-6 - filter_top3_paths.py:
-    -> preso i 3 percorsi precedentemente trovati e filtrato dal csv solo quelle attività in modo da avere una visualizzazione sulla mappa
-
-    <-- Output: filtered_activities_top3_paths.csv (activities prese da matched_coords.csv che corrispondono a quelle)
+### 6 - filter_top3_paths.py:
+###     -> preso i 3 percorsi precedentemente trovati e filtrato dal csv solo quelle attività in modo da avere una visualizzazione sulla mappa
+### 
+###     <-- Output: filtered_activities_top3_paths.csv (activities prese da matched_coords.csv che corrispondono a quelle)
 	
 
-7 - plot_paths.py:
-    -> creo un file .html per ogni TOP PATH per vedere a grandi linee i percorsi
+### 7 - plot_paths.py:
+###     -> creo un file .html per ogni TOP PATH per vedere a grandi linee i percorsi
+### 
+###     <-- Output: plot_path_<num>_ALL.html
 
-    <-- Output: plot_path_<num>_ALL.html
-
+8 - assign_estimated_time_to_edges.py:
 
 
 ####

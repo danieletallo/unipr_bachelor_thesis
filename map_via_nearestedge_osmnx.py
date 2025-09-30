@@ -32,7 +32,7 @@ def process_segment(G, activity_id, edge, gps_segment, time_segment):
 
     return {
         'ActivityId': activity_id, 'IsLegal': legal, 'HasCycleway': cw,
-        'NomeVia': nm, 'Nodo_Da': edge[0], 'Nodo_A': edge[1],
+        'NomeVia': nm, 'Nodo_Da': edge[0], 'Nodo_A': edge[1], 'Key': edge[2],
         'PercentualePercorsa': perc, 'DistanzaPercorsa_m': sl,
         'LunghezzaEdge_m': el, 'TempoAtteso_s': exp,
         'TimeFrom': t0, 'TimeTo': t1
@@ -250,5 +250,5 @@ if __name__ == '__main__':
 
     # -------- Esporta --------
     out = pd.DataFrame(all_segments)
-    out.to_csv(os.path.join(script_dir,'segments_all_activities.csv'),index=False)
-    print(f"Esportato 'segments_all_activities.csv' con {len(all_segments)} segmenti.")
+    out.to_csv(os.path.join(script_dir,'segments_all_activities_REMAKE.csv'),index=False)
+    print(f"Esportato 'segments_all_activities_REMAKE.csv' con {len(all_segments)} segmenti.")

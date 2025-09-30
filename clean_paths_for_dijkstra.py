@@ -21,7 +21,8 @@ print(f">>> Numero di activityid unici in segments_all_activities.csv: {num_uniq
 # così da vedere qual è il nodo comune all'inizio e alla fine del percorso
 # per poter applicare Dijkstra tra questi due nodi
 
-valid_paths = 0
+valid_paths_counter = 0
+valid_paths = []
 for activity_id, group in df.groupby('ActivityId'):
     if (len(group) < 4):
         continue  # Ignora i percorsi con meno di 4 segmenti
@@ -34,7 +35,17 @@ for activity_id, group in df.groupby('ActivityId'):
     # Controllo se in start_nodes c'è un nodo che è anche in second_row_nodes
     # e se in end_nodes c'è un nodo che è anche in penultimate_row_nodes
     # controllo sia Nodo_Da che Nodo_A
-    if (start_nodes & second_row_nodes) and (end_nodes & penultimate_row_nodes):
-        valid_paths += 1
-        
-print(f">>> Numero di percorsi validi in segments_all_activities.csv: {valid_paths}")
+    if len(start_nodes & second_row_nodes) == 1 and len(end_nodes & penultimate_row_nodes) == 1:
+        valid_paths_counter += 1
+        ## Aggiungo al dataframe l'ActivityId, il Nodo in comune all'inizio (start_node) e alla fine (end_node) e TimeFrom della seconda riga e TimeTo della penultima riga
+        start_node = (start_nodes & second_row_nodes).pop()
+        end_node = (end_nodes & penultimate_row_nodes).pop()
+        time_from = group.iloc[1]['TimeFrom']
+        time_to = group.iloc[-2]['TimeTo']
+        time_s = (pd.to_datetime(time_to) - pd.to_datetime(time_from)).total_seconds()
+        valid_paths.append([activity_id, start_node, end_node, time_from, time_to, time_s])
+
+valid_paths = pd.DataFrame(valid_paths, columns=["ActivityId", "StartNode", "EndNode", "TimeFrom", "TimeTo", "Time_s"])
+valid_paths.to_csv(os.path.join(script_dir, "cleaned_paths_for_dijkstra.csv"), index=False, header=True)
+
+print(f">>> Numero di percorsi validi in segments_all_activities.csv: {valid_paths_counter}")
