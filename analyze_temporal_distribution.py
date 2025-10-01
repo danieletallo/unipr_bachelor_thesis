@@ -12,6 +12,21 @@ START_AXIS = pd.Timestamp("2017-04-01")
 END_AXIS   = pd.Timestamp("2017-10-01")
 CUTOFF     = pd.Timestamp("2017-10-01 23:59:59")  # includi tutto fino al 1/10/2017
 
+# --- aggiungi in cima al file (dopo le costanti) ---
+def italian_holidays_2017():
+    """Ritorna {Timestamp->nome} per le principali festività nazionali Apr–Ott 2017."""
+    h = {
+        pd.Timestamp("2017-04-16"): "Pasqua",
+        pd.Timestamp("2017-04-17"): "Pasquetta",
+        pd.Timestamp("2017-04-25"): "Liberazione",
+        pd.Timestamp("2017-05-01"): "Lavoro",
+        pd.Timestamp("2017-06-02"): "Repubblica",
+        pd.Timestamp("2017-08-15"): "Ferragosto",
+    }
+    # tieni solo quelle nel range asse
+    return {d.normalize(): name for d, name in h.items() if START_AXIS <= d <= END_AXIS}
+
+
 def load_starts(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path, usecols=["ActivityId", "TimeFrom"])
     df["TimeFrom"] = pd.to_datetime(df["TimeFrom"], errors="coerce")
@@ -26,23 +41,25 @@ def load_starts(csv_path: str) -> pd.DataFrame:
     )
     return starts
 
+# --- sostituisci la tua plot_daily_distribution con questa ---
 def plot_daily_distribution(outdir: Path, starts: pd.DataFrame):
-    daily_real = (
+    # conteggio per giorno (normalizzato) + reindex su tutti i giorni per mostrare anche gli zeri
+    daily = (
         starts["Start"].dt.normalize()
         .value_counts()
         .sort_index()
         .rename("count")
     )
 
-    if daily_real.empty:
+    if daily.empty:
         print("Nessun dato dopo il filtro date. Salto il grafico giornaliero.")
         return
 
-    # Asse X: Apr, May, Jun, Jul, Aug, Sep, Oct
-    daily_real = daily_real[(daily_real.index >= START_AXIS) & (daily_real.index <= END_AXIS)]
+    full_days = pd.date_range(START_AXIS, END_AXIS, freq="D")
+    daily = daily.reindex(full_days, fill_value=0)
 
     fig, ax = plt.subplots(figsize=(12, 5))
-    ax.plot(daily_real.index, daily_real.values, "-o", ms=2, lw=0.9, label="Daily count")
+    ax.plot(daily.index, daily.values, "-o", ms=2, lw=0.9, label="Daily count")
 
     ax.set_title("Daily Activity Count (Apr–Oct 2017)", pad=10)
     ax.set_xlabel("Month")
@@ -51,16 +68,29 @@ def plot_daily_distribution(outdir: Path, starts: pd.DataFrame):
     ax.yaxis.set_major_locator(MaxNLocator(integer=True))
     ax.grid(True, alpha=0.25, linestyle="--", linewidth=0.6)
 
-    # Set ticks at the start of each month
+    # ticks a inizio mese
     months = pd.date_range(START_AXIS, END_AXIS, freq="MS")
     ax.set_xticks(months)
     ax.set_xticklabels([d.strftime("%b") for d in months])
-
     ax.set_xlim(START_AXIS, END_AXIS)
+
+    # --- evidenzia festività con "*" ---
+    holidays = italian_holidays_2017()
+    holi_idx = [d for d in daily.index if d in holidays]
+    holi_vals = [daily.loc[d] for d in holi_idx]
+
+    if holi_idx:
+        ax.scatter(
+            holi_idx, holi_vals,
+            marker="*", s=130, edgecolor="k", linewidths=0.6,
+            zorder=3, label="Festività"
+        )
+
     ax.legend()
     fig.tight_layout()
     fig.savefig(outdir / "daily_count.png", dpi=220)
     plt.close(fig)
+
 
 
 def plot_hourly(outdir: Path, starts: pd.DataFrame):
