@@ -23,6 +23,7 @@ print(f">>> Numero di activityid unici in segments_all_activities.csv: {num_uniq
 
 valid_paths_counter = 0
 valid_paths = []
+
 for activity_id, group in df.groupby('ActivityId'):
     if (len(group) < 4):
         continue  # Ignora i percorsi con meno di 4 segmenti
@@ -35,7 +36,7 @@ for activity_id, group in df.groupby('ActivityId'):
     # Controllo se in start_nodes c'è un nodo che è anche in second_row_nodes
     # e se in end_nodes c'è un nodo che è anche in penultimate_row_nodes
     # controllo sia Nodo_Da che Nodo_A
-    if len(start_nodes & second_row_nodes) == 1 and len(end_nodes & penultimate_row_nodes) == 1:
+    if len(start_nodes & second_row_nodes) == 1 and len(end_nodes & penultimate_row_nodes) == 1 and len(start_nodes & end_nodes) == 0:
         valid_paths_counter += 1
         ## Aggiungo al dataframe l'ActivityId, il Nodo in comune all'inizio (start_node) e alla fine (end_node) e TimeFrom della seconda riga e TimeTo della penultima riga
         start_node = (start_nodes & second_row_nodes).pop()
