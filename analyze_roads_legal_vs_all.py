@@ -42,49 +42,78 @@ def clean_segments(csv_path):
 
 def build_edges_from_pbf(pbf_path):
     """
-    Estrae edges dal PBF e garantisce: u, v, key, highway.
-    Usa nodes=True per avere la topologia (u/v).
+    Estrae gli edge dal PBF replicando la pipeline:
+    Pyrosm -> (nodes, edges) -> grafo OSMnx -> simplify_graph -> edges semplificati.
+    Ritorna u, v, key, highway coerenti con la semplificazione.
     """
     from pyrosm import OSM
     import pandas as pd
-    import numpy as np
+    import osmnx as ox
 
+    extra_attrs = ["oneway", "highway", "cycleway", "bicycle"]
     osm = OSM(pbf_path)
 
-    # IMPORTANTISSIMO: nodes=True -> crea topologia con u/v
-    # network_type="all" per includere footway, path, steps, ecc.
+    # 1) Prendi nodi+archi con i tag necessari
     nodes_gdf, edges_gdf = osm.get_network(
-        network_type="all",
+        network_type="cycling",
+        extra_attributes=extra_attrs,
         nodes=True
     )
 
-    e = edges_gdf.copy()
+    # 2) NODES: indice = osmid, colonne x,y da geometria
+    nodes = nodes_gdf.copy()
+    if "id" not in nodes.columns:
+        raise KeyError("Nei nodi manca la colonna 'id'.")
+    nodes = nodes.dropna(subset=["id"]).copy()
+    nodes["osmid"] = pd.to_numeric(nodes["id"], errors="coerce")
+    nodes = nodes.dropna(subset=["osmid"]).copy()
+    nodes["osmid"] = nodes["osmid"].astype("int64")
 
-    # Verifica che u/v esistano davvero
-    if "u" not in e.columns or "v" not in e.columns:
-        raise KeyError(
-            "Mancano le colonne 'u'/'v'. Assicurati di aver passato nodes=True a get_network()."
-        )
+    # x,y da geometry (pyrosm fornisce geometry=Point)
+    nodes["x"] = nodes.geometry.x
+    nodes["y"] = nodes.geometry.y
+    nodes = nodes.set_index("osmid")
 
-    # Dtypes coerenti
-    e["u"] = pd.to_numeric(e["u"], errors="coerce").astype("Int64")
-    e["v"] = pd.to_numeric(e["v"], errors="coerce").astype("Int64")
+    # 3) EDGES: garantisci u,v int64 e key univoca per (u,v)
+    edges = edges_gdf.copy()
+    for col in ("u", "v"):
+        if col not in edges.columns:
+            raise KeyError(f"Manca la colonna '{col}' in edges.")
+        edges[col] = pd.to_numeric(edges[col], errors="coerce")
+    edges = edges.dropna(subset=["u", "v"]).copy()
+    edges["u"] = edges["u"].astype("int64")
+    edges["v"] = edges["v"].astype("int64")
 
-    # Crea 'key' se manca o non è univoca
-    if "key" not in e.columns or e.duplicated(["u","v","key"]).any():
-        e = e.sort_values(["u","v"]).copy()
-        e["key"] = e.groupby(["u","v"]).cumcount()
+    # crea 'key' se manca o non è univoca
+    if "key" not in edges.columns or edges.duplicated(["u", "v", "key"]).any():
+        edges = edges.sort_values(["u", "v"]).copy()
+        edges["key"] = edges.groupby(["u", "v"]).cumcount()
 
-    # Normalizza highway (può essere lista)
+    # >>> QUI IL PUNTO CHIAVE: MultiIndex (u, v, key) prima di graph_from_gdfs
+    edges = edges.set_index(["u", "v", "key"]).sort_index()
+
+    # 4) Costruisci grafo e semplifica come fai nell’altro script
+    G = ox.graph_from_gdfs(nodes, edges)   # ora edges ha il MultiIndex giusto
+    G = ox.simplify_graph(G)
+
+    # 5) Riesporta gli edge semplificati
+    _, e = ox.graph_to_gdfs(G, nodes=True, edges=True)
+    e = e.reset_index()
+
+    # Assicura 'key' coerente e 'highway' normalizzato
+    if "key" not in e.columns or e.duplicated(["u", "v", "key"]).any():
+        e = e.sort_values(["u", "v"]).copy()
+        e["key"] = e.groupby(["u", "v"]).cumcount()
+
     def norm_hw(h):
         if isinstance(h, (list, tuple)) and len(h) > 0:
             return h[0]
         return h
+    e["highway"] = e["highway"].apply(norm_hw) if "highway" in e.columns else "unknown"
 
-    e["highway"] = e["highway"].apply(norm_hw)
     e["key"] = e["key"].astype(str)  # per il join con i segmenti (Key)
+    return e[["u", "v", "key", "highway"]]
 
-    return e[["u","v","key","highway"]]
 
 
 def merge_segments_with_edges(segments_df, edges_df):
