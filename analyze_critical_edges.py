@@ -1,5 +1,6 @@
 # analyze_critical_edges.py
 import pandas as pd
+import numpy as np
 
 # Read dataset
 df = pd.read_csv("segments_all_activities.csv")
@@ -23,6 +24,11 @@ agg = agg.rename(columns={False: "IllegalDistance_m", True: "LegalDistance_m"}).
 
 # --- Totale ---
 agg["TotalDistance_m"] = agg["IllegalDistance_m"] + agg["LegalDistance_m"]
+agg["LegalPct"] = np.where(
+    agg["TotalDistance_m"] > 0,
+    (agg["LegalDistance_m"] / agg["TotalDistance_m"]) * 100.0,
+    np.nan
+)
 
 # --- Prendi i top 10 archi per IllegalDistance_m ---
 critical = agg.sort_values("IllegalDistance_m", ascending=False).head(10)
