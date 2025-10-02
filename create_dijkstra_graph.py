@@ -50,36 +50,6 @@ def normalize_nodes_and_edges(nodes, edges):
     edges = edges.set_index(['u','v','key']).sort_index()
     
     return nodes, edges
-
-# def plot_graph_with_basemap(graph, filename):
-#     # Proietta in Web Mercator (EPSG:3857) per allineare le tile
-#     graph_3857 = ox.project_graph(graph, to_crs="EPSG:3857")
-
-#     # Plot del grafo già in 3857
-#     fig, ax = ox.plot_graph(
-#         graph_3857,
-#         node_size=0.5,
-#         edge_color="black",
-#         edge_linewidth=0.7,
-#         bgcolor="white",
-#         show=False,
-#         close=False
-#     )
-
-#     # Fissa uno zoom valido (p.es. 13 per Bologna)
-#     ctx.add_basemap(
-#         ax,
-#         # source=ctx.providers.CartoDB.Voyager,
-#         source=ctx.providers.OpenStreetMap.Mapnik,
-#         zoom=13,
-#         attribution=True,
-#         reset_extent=False
-#     )
-
-    
-#     # Salvo il plot
-#     plt.tight_layout()
-#     plt.savefig(filename, dpi=300)
     
 #######################
 #######################

@@ -14,19 +14,6 @@
 
 3 - map_via_nearestedge_osmnx.py:
     -> calcolo, partendo dai punti matchati, dei vari segmenti attraversati e dei tempi stimati di percorrenza sui vari archi
-	   mettendo in output:
-	    'ActivityId'          -> id dell'attività 
-		'IsLegal'             -> se la direzione del segmento rispecchia il codice della strada 
-		'HasCycleway'         -> se l'arco possiede una pista ciclabile
-		'NomeVia'             -> nome via 
-		'Nodo_Da'             -> nodo da (dell'arco)
-		'Nodo_A'              -> nodo a (dell'arco)
-        'PercentualePercorsa' -> 'DistanzaPercorsa_m' / 'LunghezzaEdge_m' * 100
-		'DistanzaPercorsa_m'  -> distanza in metri effettivamente percorsa
-		'LunghezzaEdge_m'     -> lunghezza dell'arco
-		'TempoAtteso_s'       -> ('TimeTo' - 'TimeFrom') / PercentualePercorsa * 100
-        'TimeFrom'            -> primo tempo registrato sull'arco
-		'TimeTo'              -> ultimo tempo registrato sull'arco
    
     <-- Output: segments_all_activities.csv (segmenti con tempi stimati, etc..)
 		
@@ -42,46 +29,46 @@
 	   da questi cercheremo i percorsi veri più utilizzati e lo confronteremo con quello migliore secondo Dijkstra.
 
     <-- Output: top3_pairs.html (rappresentazione grafica top 3 percorsi)
-	   
-### 6 - filter_top3_paths.py:
-###     -> preso i 3 percorsi precedentemente trovati e filtrato dal csv solo quelle attività in modo da avere una visualizzazione sulla mappa
-### 
-###     <-- Output: filtered_activities_top3_paths.csv (activities prese da matched_coords.csv che corrispondono a quelle)
+
+6 - analyze_temporal_distribution.py:
+    -> analizzo la distribuzione nei giorni/mesi e negli orari tra weekday e weekend
 	
+	<-- Output: daily_count.png e hourly_weekday_vs_weekend.png
 
-### 7 - plot_paths.py:
-###     -> creo un file .html per ogni TOP PATH per vedere a grandi linee i percorsi
-### 
-###     <-- Output: plot_path_<num>_ALL.html
+7 - assign_estimated_time_to_edges.py:
+    -> skippando il primo e ultimo arco causa eventuali "nuvole di punti", assegno il peso ad ogni arco per Dijkstra
+	
+	<-- Output: edges_with_estimated_times.csv 
+	
+8 - clean_paths_for_dijkstra.py:
+    -> considero solo percorsi che hanno nodo in comune tra primo e secondo arco (e tra penultimo ed ultimo)
+	   e con 0 nodi in comune tra primo e ultimo arco (per skippare percorsi che vanno dalla sorgente a destinazione=sorgente
+	   e per avere un nodo di partenza e di arrivo che fanno da "incrocio" per applicarci Dijkstra
+	
+	<-- Output: cleaned_paths_for_dijkstra.csv
+	
+9 - create_dijkstra_graph.py:
+    -> creazione grafo direzionato ed associazione dei pesi agli archi
+	
+	<-- Output: bologna_graph.graphml
 
-8 - assign_estimated_time_to_edges.py:
+10 - apply_dijkstra.py:
+    -> applico Dijkstra a tutti i percorsi tramite grafo precedentemente creato
+	
+	<-- Output: dijkstra_results.csv
 
+11 - analyze_bikers_time_efficiency.py:
+    -> analizzo per scaglioni orari quanto è più/meno efficiente il ciclista rispetto a Dijkstra
+	
+	<-- Output: efficiency_by_duration_bins.csv
 
-####
-####
-#### TODO:
+12 - analyze_roads_legal_vs_all.py:
+    -> analizzo % legalità vs totale su metri percorsi per tipo di strada
+	
+	<-- Output: roads_analysis.csv
 
-1) quanto è efficiente l'utente rispetto a Dijkstra (Dijkstra farlo 1 volta, ma per ogni activity id devo vedere durata vera vs ottimale con Dijkstra)
-2) quanto rispetta il codice della strada -> evidenziare gli archi coinvolti
-
-3) su top 3 evidenziare i percorsi ottimali vs dijkstra
-e confrontarli.
-
-VELOCI:
-4) Analisi di quanto i ciclisti seguano il codice stradale (di tutto?)
-5) Esaminare i tipi di strada usati (di tutto?)
-
-6+) Esaminare quanti percorsi per mese e per orario?
-
-
-
-
-TODO AGGIUNTIVI NELLE COSE GIA' FATTI:
-1) SKIPPARE PRIMO E ULTIMO ARCO PERCORSO per Dijkstra perché a volte i ciclisti ci mettono tanto ad avviare e chiudere app e si raccolgono tanti punti lì
-P.S. nelle stime dei tempi attualmente ho rimosso le stime sui primi e ultimi archi percorsi causa "nuvole di punti".
-     quando però dovrò calcolare Dijkstra dovrò ovviamente considerare il primo e ultimo arco del percorso con l'accortezza di proporzionare il tempo stimato sulla percentuale di quei 2 archi percorsi altrimenti con Dijkstra andrei a considerare le strade di partenza e arrivo per intero anche se non totalmente percorsi.
-
-FATTO - 2) MEDIA PONDERATA INVECE CHE ARITMETICA cosi non devo skippare archi percorsi sotto una certa percentuale
-
-
-
+13 - analyze_critical_edges.py:
+    -> Esamina i top 10 archi per metri totali percorsi illegalmente e da questi mostro % legalità vs totale
+	   e li mostro graficamente (questo fatto separatamente, output -> critical_edges_map.png)
+	
+	<-- Output: critical_edges.csv
