@@ -1,35 +1,28 @@
-# Leggi il grafo dal file grafo.graphml e applica Dijkstra tra due nodi di esempio
+# Read the graph from the file .graphml and apply Dijkstra between two example nodes
 import os
 from time import time
 from osmnx import io as oxio
 import pandas as pd
 import networkx as nx
 
-# Carica il grafo da file
+# Load the graph from the file
 script_dir = os.path.dirname(os.path.abspath(__file__))
-graphml_path = os.path.join(script_dir, "grafo.graphml")
+graphml_path = os.path.join(script_dir, "bologna_graph.graphml")
 
 graph = oxio.load_graphml(graphml_path, edge_dtypes={"weight": float, "oneway": str})
 
-print(">>> Grafo caricato da grafo.graphml")
+print(">>> Graph loaded from bologna_graph.graphml")
 
 
-# # # # # # Applico Dijkstra tra due nodi di esempio
-# # # # # # Da 250735019,390032680 a 251897634,341927978
-# # # # # # Applicando i 4 percorsi possibili, ovvero da u_orig a u_dest, da u_orig a v_dest, da v_orig a u_dest, da v_orig a v_dest
 
-# # # # # # start_node = 567074443   # 250735019,390032680
-# # # # # # end_node = 297798839     #251897634,341927978
-
-
-# Leggo i percorsi puliti da cleaned_paths_for_dijkstra.csv
+# Read the cleaned paths from cleaned_paths_for_dijkstra.csv
 
 cleaned_paths_path = os.path.join(script_dir, "cleaned_paths_for_dijkstra.csv")
 df_paths = pd.read_csv(cleaned_paths_path)
 
 dijkstra_results = []
 
-print(f">>> Inizio calcolo percorsi Dijkstra per {len(df_paths)} percorsi...")
+print(f">>> Starting Dijkstra path calculations for {len(df_paths)} paths...")
 paths_not_found = 0
 
 for index, row in df_paths.iterrows():
@@ -38,7 +31,7 @@ for index, row in df_paths.iterrows():
     end_node = row['EndNode']
 
     if (index % 1000 == 0) and index > 0:
-        print(f">>> Elaborati {index} percorsi Dijkstra...")
+        print(f">>> Processed {index} Dijkstra paths...")
 
     try:
         path_length = None
@@ -72,10 +65,10 @@ for index, row in df_paths.iterrows():
         })
         paths_not_found += 1
 
-# Salvo i risultati in un file CSV
+# Save the results to a CSV file
 df_dijkstra = pd.DataFrame(dijkstra_results)
 dijkstra_csv_path = os.path.join(script_dir, "dijkstra_results.csv")
 df_dijkstra.to_csv(dijkstra_csv_path, index=False, header=True)
 
-print(f">>> Percorsi non trovati: {paths_not_found}")
-print(f">>> Risultati Dijkstra salvati in {dijkstra_csv_path}")
+print(f">>> Paths not found: {paths_not_found}")
+print(f">>> Dijkstra results saved in {dijkstra_csv_path}")

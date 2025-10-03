@@ -1,24 +1,24 @@
 import pandas as pd
 import numpy as np
 
-# 1) Carica il file prodotto dal tuo script
+# 1) Load the file
 df = pd.read_csv("dijkstra_results.csv")
 
-# 2) Pulisci i dati minimi necessari
+# 2) Clean the minimum required data
 df = df.dropna(subset=["Time_s", "DijkstraTime_s"]).copy()
 df = df[(df["Time_s"] > 0) & (df["DijkstraTime_s"] > 0)]
 
-# 3) Metriche: quanto sono più lenti/veloci del teorico
-df["efficiency_ratio"] = df["Time_s"] / df["DijkstraTime_s"]         # 1 = uguale al teorico; >1 = più lento
+# 3) Metrics: how much slower/faster than theoretical
+df["efficiency_ratio"] = df["Time_s"] / df["DijkstraTime_s"]         # 1 = same as theoretical; >1 = slower
 df["over_pct"] = (df["Time_s"] - df["DijkstraTime_s"]) / df["DijkstraTime_s"] * 100
 
-# 4) Minuti reali e fasce (modifica i bin se vuoi più/meno dettagli)
+# 4) Actual minutes and bins
 df["real_minutes"] = (df["Time_s"] // 60).astype(int)
 bins = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, np.inf]
 labels = ["0–<5", "5–<10", "10–<15", "15–<20", "20–<30", "30–<45", "45–<60", "60–<90", "90–<120", ">=120"]
 df["duration_bin"] = pd.cut(df["real_minutes"], bins=bins, labels=labels, right=False)
 
-# 5) Riepilogo per fascia: conteggio, media e mediana
+# 5) Summary by bin: count, mean, and median
 summary = (df.groupby("duration_bin")
              .agg(
                  n=("ActivityId", "count"),
@@ -29,7 +29,7 @@ summary = (df.groupby("duration_bin")
              )
              .reset_index())
 
-# 6) Salva e mostra
+# 6) Save and display
 summary.to_csv("efficiency_by_duration_bins.csv", index=False)
 print(summary)
-print("\nSalvato in efficiency_by_duration_bins.csv")
+print("\nSaved in efficiency_by_duration_bins.csv")

@@ -6,16 +6,16 @@ import numpy as np
 import folium
 from folium.features import DivIcon
 
-# Parametri
+# Parameters
 MATCHED_COORDS_CSV = "matched_coords.csv"
 CELL_SIZE_M = 750
-OUTPUT_OD = "od_by_grid.csv"          # qui salviamo origin/dest come RANK (1..K)
+OUTPUT_OD = "od_by_grid.csv"          # Save origin/destination as RANK (1..K)
 OUTPUT_GRID_GEOJSON = "grid_tiles.geojson"
 OUTPUT_HTML = "grid_top_cells.html"
 TOP_K_CELLS = 5
 
-# 1) Origini/Destinazioni
-print(">>> 1) Caricamento origini/destinazioni...")
+# 1) Load origins/destinations
+print(">>> 1) Loading origins/destinations...")
 df = pd.read_csv(MATCHED_COORDS_CSV, parse_dates=["Time"]).dropna(subset=["NEW_Latitude","NEW_Longitude"])
 orig = df.groupby("ActivityId").head(1)
 dest = df.groupby("ActivityId").tail(1)
@@ -23,8 +23,8 @@ dest = df.groupby("ActivityId").tail(1)
 g_orig = gpd.GeoDataFrame(geometry=gpd.points_from_xy(orig.NEW_Longitude, orig.NEW_Latitude), crs=4326)
 g_dest = gpd.GeoDataFrame(geometry=gpd.points_from_xy(dest.NEW_Longitude, dest.NEW_Latitude), crs=4326)
 
-# 2) Griglia semplice in UTM 32N
-print(">>> 2) Creazione griglia...")
+# 2) Create grid in UTM 32N
+print(">>> 2) Creating grid...")
 utm = CRS.from_epsg(32632)
 g_orig, g_dest = g_orig.to_crs(utm), g_dest.to_crs(utm)
 minx = min(g_orig.total_bounds[0], g_dest.total_bounds[0])
@@ -37,28 +37,28 @@ ys = np.arange(miny, maxy+CELL_SIZE_M, CELL_SIZE_M)
 cells = [box(xs[i], ys[j], xs[i+1], ys[j+1]) for i in range(len(xs)-1) for j in range(len(ys)-1)]
 grid = gpd.GeoDataFrame({"cell_id": range(len(cells))}, geometry=cells, crs=utm)
 
-# 3) OD per cella
-print(">>> 3) Calcolo OD per cella...")
+# 3) Compute OD per cell
+print(">>> 3) Computing OD per cell...")
 orig_join = gpd.sjoin(g_orig, grid, how="left", predicate="within")[["cell_id"]].rename(columns={"cell_id":"origin"})
 dest_join = gpd.sjoin(g_dest, grid, how="left", predicate="within")[["cell_id"]].rename(columns={"cell_id":"dest"})
 od = pd.concat([orig_join.reset_index(drop=True), dest_join.reset_index(drop=True)], axis=1).dropna().astype(int)
 
 od_counts = od.groupby(["origin","dest"]).size().reset_index(name="count")
 
-# 4) Score cella e TOP-K con colonna coerente
-print(">>> 4) Calcolo top-K celle...")
+# 4) Compute top-K cells
+print(">>> 4) Computing top-K cells...")
 score = od_counts.groupby("origin")["count"].sum().add(od_counts.groupby("dest")["count"].sum(), fill_value=0)
 top = (score.sort_values(ascending=False)
             .head(TOP_K_CELLS)
-            .rename_axis("cell_id")      # <— nome chiaro per l’indice
-            .reset_index())               # ora c’è una colonna 'cell_id'
+            .rename_axis("cell_id")      # Clear name for the index
+            .reset_index())               # Now there is a 'cell_id' column
 top["rank"] = range(1, len(top)+1)
 
-# mappa cella_id -> rank
+# Map cell_id -> rank
 rank_map = dict(zip(top["cell_id"], top["rank"]))
 
-# 5) CSV finale con RANK al posto degli id cella (tieni solo coppie tra top)
-print(">>> 5) Salvataggio OD con rank...")
+# 5) Final CSV with RANK instead of cell ids (keep only pairs among top cells)
+print(">>> 5) Saving OD with rank...")
 od_rank = od_counts.copy()
 od_rank["origin"] = od_rank["origin"].map(rank_map)
 od_rank["dest"]   = od_rank["dest"].map(rank_map)
@@ -66,11 +66,11 @@ od_rank = od_rank.dropna(subset=["origin","dest"]).astype({"origin":int,"dest":i
 od_rank = od_rank.sort_values("count", ascending=False)
 od_rank.to_csv(OUTPUT_OD, index=False)
 
-# 6) Mappa con numeri dei rank
-print(">>> 6) Salvataggio mappa top-K celle...")
+# 6) Map with rank numbers
+print(">>> 6) Saving map of top-K cells...")
 grid_wgs84 = grid.to_crs(4326)
 
-# calcolo centroidi in UTM, poi trasformo in WGS84
+# Compute centroids in UTM, then transform to WGS84
 centroids = grid.to_crs(32632).centroid.to_crs(4326)
 
 m = folium.Map(location=[centroids.y.mean(), centroids.x.mean()], zoom_start=12)
@@ -89,12 +89,12 @@ for _, r in top.iterrows():
 m.save(OUTPUT_HTML)
 grid_wgs84.to_file(OUTPUT_GRID_GEOJSON, driver="GeoJSON")
 
-# 7) Archi più frequenti tra coppie di celle TOP (direzionali A->B) ===
-SEGMENTS_CSV = "segments_all_activities.csv"   # ActivityId, Nodo_Da, Nodo_A
+# 7) Most frequent arcs between top cell pairs (directional A->B) ===
+SEGMENTS_CSV = "segments_all_activities.csv"   # ActivityId, Node_From, Node_To
 OUTPUT_TOP_ARCS = "top_cell_pairs_arc_favorites_directed.csv"
-TOP_PER_PAIR = 3  # quanti percorsi per ogni pair di celle TOP
+TOP_PER_PAIR = 3  # Number of paths per pair of top cells
 
-# a) ricostruisco assegnazione cella (con ActivityId) per origini e destinazioni
+# a) Reconstruct cell assignment (with ActivityId) for origins and destinations
 g_orig_id = gpd.GeoDataFrame(
     orig[["ActivityId"]].copy(),
     geometry=gpd.points_from_xy(orig.NEW_Longitude, orig.NEW_Latitude),
@@ -112,7 +112,7 @@ od_cells = orig_cells.merge(dest_cells, on="ActivityId", how="inner").dropna().a
 
 top_cells = set(top["cell_id"].tolist())
 
-# b) carico segmenti e ordino (se ci sono colonne temporali)
+# b) Load segments and sort (if there are temporal columns)
 seg = pd.read_csv(SEGMENTS_CSV)
 sort_cols = [c for c in ["ActivityId","TimeFrom","TimeTo"] if c in seg.columns]
 if sort_cols:
@@ -122,7 +122,7 @@ else:
 
 rows = []
 
-# c) per ogni coppia ordinata A->B tra celle TOP, prendo attività con (origin_cell=A, dest_cell=B)
+# c) For each ordered pair A->B among top cells, get activities with (origin_cell=A, dest_cell=B)
 for a in sorted(top_cells):
     for b in sorted(top_cells):
         if a == b:
@@ -133,7 +133,7 @@ for a in sorted(top_cells):
 
         sub = seg[seg["ActivityId"].isin(acts)][["ActivityId","Nodo_Da","Nodo_A"]].copy()
 
-        # per ogni activity: primo arco = uscita da A, ultimo arco = arrivo in B
+        # For each activity: first arc = exit from A, last arc = arrival in B
         for act in acts:
             s = sub[sub.ActivityId==act]
             if s.empty:
@@ -147,7 +147,7 @@ for a in sorted(top_cells):
                 "ActivityId": act
             })
 
-# d) aggrego e tengo i TOP_PER_PAIR percorsi per coppia A->B
+# d) Aggregate and keep TOP_PER_PAIR paths per pair A->B
 if rows:
     dfp = pd.DataFrame(rows)
     agg = (dfp.groupby(["src_cell","dst_cell","node_src_from","node_src_to","node_dst_from","node_dst_to"], as_index=False)
@@ -155,14 +155,14 @@ if rows:
     agg = agg.sort_values(["src_cell","dst_cell","count"], ascending=[True, True, False])
     top_paths = agg.groupby(["src_cell","dst_cell"], group_keys=False).head(TOP_PER_PAIR).reset_index(drop=True)
 
-    # aggiungo i rank delle celle (1..K) per leggibilità
+    # Add cell ranks (1..K) for readability
     cell2rank = dict(zip(top["cell_id"], top["rank"]))
     top_paths["src_rank"] = top_paths["src_cell"].map(cell2rank)
     top_paths["dst_rank"] = top_paths["dst_cell"].map(cell2rank)
 
-    # salvo
+    # Save
     cols = ["src_cell","dst_cell","src_rank","dst_rank","node_src_from","node_src_to","node_dst_from","node_dst_to","count"]
     top_paths[cols].to_csv(OUTPUT_TOP_ARCS, index=False)
-    print(f">>> 7) Salvato: {OUTPUT_TOP_ARCS} ({len(top_paths)} righe)")
+    print(f">>> 7) Saved: {OUTPUT_TOP_ARCS} ({len(top_paths)} rows)")
 else:
-    print(">>> 7) Nessuna attività trovata tra coppie TOP (controlla i dati).")
+    print(">>> 7) No activities found between top pairs (check the data).")

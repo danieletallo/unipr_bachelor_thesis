@@ -1,7 +1,7 @@
 ## Dijkstra's Algorithm Implementation
-# Prendo in considerazione il file .osm.pbf del 2018
-# Creo il grafo con gli archi pesati in base alla stima dei tempi del file "edges_with_estimated_times.csv"
-# per capire la direzione di marcia prendo spunto dal "map_via_nearestedge_osmnx.py"
+# Using the .osm.pbf file from 2018
+# Create the graph with edges weighted based on the estimated times from the file "edges_with_estimated_times.csv"
+# To determine the direction of travel, refer to "map_via_nearestedge_osmnx.py"
 import os
 import osmnx as ox
 import networkx as nx
@@ -15,22 +15,22 @@ from shapely.ops import substring
 from shapely.geometry import Point
 
 def normalize_nodes_and_edges(nodes, edges):
-    # ---------- NORMALIZZA NODES ----------
+    # ---------- NORMALIZE NODES ----------
     nodes = nodes.rename(columns={'id': 'osmid'})
     nodes = nodes.rename(columns={'lon': 'x', 'lat': 'y'})
 
-    # pulizia e indice coerente
+    # Clean and set consistent index
     nodes = nodes.dropna(subset=['osmid']).copy()
     nodes['osmid'] = pd.to_numeric(nodes['osmid'], errors='coerce')
     nodes = nodes.dropna(subset=['osmid']).copy()
     nodes['osmid'] = nodes['osmid'].astype('int64')
     nodes = nodes.set_index('osmid')
 
-    # ---------- NORMALIZZA EDGES ----------
-    # u/v devono esistere e avere stesso dtype dei nodes.index
+    # ---------- NORMALIZE EDGES ----------
+    # u/v must exist and have the same dtype as nodes.index
     for col in ('u', 'v'):
         if col not in edges.columns:
-            raise ValueError(f"Manca la colonna '{col}' in edges.")
+            raise ValueError(f"Missing column '{col}' in edges.")
     edges = edges.dropna(subset=['u','v']).copy()
     edges['u'] = pd.to_numeric(edges['u'], errors='coerce')
     edges['v'] = pd.to_numeric(edges['v'], errors='coerce')
@@ -38,15 +38,15 @@ def normalize_nodes_and_edges(nodes, edges):
     edges['u'] = edges['u'].astype('int64')
     edges['v'] = edges['v'].astype('int64')
 
-    # FILTRA archi che puntano a nodi NON presenti (tipico dopo bbox)
+    # FILTER edges pointing to nodes NOT present (typical after bbox)
     mask_uv_ok = edges['u'].isin(nodes.index) & edges['v'].isin(nodes.index)
     edges = edges.loc[mask_uv_ok].copy()
 
-    # crea 'key' se manca o se non garantisce unicità
+    # Create 'key' if missing or if it does not guarantee uniqueness
     if 'key' not in edges.columns or edges.duplicated(['u','v','key']).any():
         edges['key'] = edges.groupby(['u','v']).cumcount()
 
-    # imposta MultiIndex richiesto (u, v, key)
+    # Set required MultiIndex (u, v, key)
     edges = edges.set_index(['u','v','key']).sort_index()
     
     return nodes, edges
@@ -55,16 +55,16 @@ def normalize_nodes_and_edges(nodes, edges):
 #######################
 
 # ------------------------------
-#  BIKE-DIRECTION (solo 4 tag)
+#  BIKE-DIRECTION (only 4 tags)
 # ------------------------------
-FORBIDDEN_HW = {"motorway", "motorway_link"}  # elimina autostrade e rampe
+FORBIDDEN_HW = {"motorway", "motorway_link"}  # remove highways and ramps
 
 def _val(d, k):
-    """Legge tag come stringa normalizzata."""
+    """Read tags as normalized strings."""
     return str(d.get(k, "")).strip().lower()
 
 def _highway_vals(d):
-    """Gestisce highway come stringa, lista o 'a;b'."""
+    """Handle highway as string, list, or 'a;b'."""
     hw = d.get("highway")
     if isinstance(hw, list):
         vals = hw
@@ -79,53 +79,53 @@ def _invert_geom(g):
 
 def _bike_dir_from_basic_tags(ed):
     """
-    Usa SOLO: oneway, highway, cycleway, bicycle.
-    Ritorna: 'none' | 'forward' | 'backward' | 'both'
-    - 'forward' intende verso u->v della riga originale.
+    Use ONLY: oneway, highway, cycleway, bicycle.
+    Returns: 'none' | 'forward' | 'backward' | 'both'
+    - 'forward' means direction u->v of the original row.
     """
-    # stop se bici vietate
+    # Stop if bikes are forbidden
     if _val(ed, "bicycle") in {"no", "dismount"}:
         return "none"
     if _highway_vals(ed) & FORBIDDEN_HW:
         return "none"
 
-    # cycleway=opposite* → bidirezionale per bici
+    # cycleway=opposite* → bidirectional for bikes
     cyc = _val(ed, "cycleway")
     if "opposite" in cyc:
         return "both"
 
-    # oneway generico
+    # Generic oneway
     ow = _val(ed, "oneway")
     if ow in {"yes", "1", "true"} or ed.get("oneway") is True or ed.get("oneway") == 1:
         return "forward"
     if ow == "-1":
         return "backward"
-    # altrimenti bidirezionale
+    # Otherwise bidirectional
     return "both"
 
 def make_bike_directed_edges(edges):
     """
-    Da edges (index: u,v,key) crea edges_bike direzionati:
-      - rimuove 'none'
+    From edges (index: u,v,key) create directed bike edges:
+      - remove 'none'
       - 'forward' → u->v
-      - 'backward' → v->u (geometry invertita)
-      - 'both' → entrambe le direzioni (duplicando e invertendo)
+      - 'backward' → v->u (geometry inverted)
+      - 'both' → both directions (duplicating and inverting)
     """
     df = edges.reset_index().copy()
 
-    # considero solo i tag essenziali
+    # Consider only essential tags
     for c in ["oneway", "highway", "cycleway", "bicycle", "geometry"]:
         if c not in df.columns:
             df[c] = None
 
-    # applico la logica di direzionalità
+    # Apply directionality logic
     df["bike_dir"] = df.apply(_bike_dir_from_basic_tags, axis=1)
     df = df[df["bike_dir"] != "none"].copy()
 
     fwd = df[df["bike_dir"].isin(["forward", "both"])].copy()
 
     bwd = df[df["bike_dir"].isin(["backward", "both"])].copy()
-    # inverti verso e geometry
+    # Invert direction and geometry
     bwd[["u", "v"]] = bwd[["v", "u"]].to_numpy()
     if "geometry" in bwd.columns:
         bwd["geometry"] = bwd["geometry"].apply(_invert_geom)
@@ -137,19 +137,19 @@ def make_bike_directed_edges(edges):
 
 def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
     """
-    Assegna i pesi agli archi in base al file CSV fornito.
-    Modifica il DataFrame edges aggiungendo la colonna 'weight'.
+    Assign weights to edges based on the provided CSV file.
+    Modify the DataFrame edges by adding the 'weight' column.
     """
-    print(">>> Assegnazione pesi agli archi in base a edges_with_estimated_times.csv...")
-    weights_df = pd.read_csv(weights_csv, usecols=["Nodo_Da","Nodo_A","Key", "TempoStimato_s"])
-    weights_df = weights_df.rename(columns={"Nodo_Da": "u", "Nodo_A": "v", "Key": "key", "TempoStimato_s": "weight"})
+    print(">>> Assigning weights to edges based on edges_with_estimated_times.csv...")
+    weights_df = pd.read_csv(weights_csv, usecols=["Node_From","Node_To","Key", "EstimatedTime_s"])
+    weights_df = weights_df.rename(columns={"Node_From": "u", "Node_To": "v", "Key": "key", "EstimatedTime_s": "weight"})
     weights_df = weights_df.dropna(subset=["u","v","weight"]).copy()
     
-    # Scorro gli edges e assegno il peso se esiste in u, v o v, u
+    # Iterate through edges and assign weight if it exists in u, v or v, u
     edge_weights = {}
     weight_set = set(zip(weights_df["u"], weights_df["v"], weights_df["key"], weights_df["weight"]))
     for (u, v, key) in edges.index:
-        # cerca peso in (u,v) o (v,u)
+        # Search for weight in (u,v) or (v,u)
         weight = None
         for (wu, wv, wk, w) in weight_set:
             if (u == wu and v == wv and key == wk) or (u == wv and v == wu and key == wk):
@@ -158,12 +158,12 @@ def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
         if weight is not None:
             edge_weights[(u, v, key)] = weight
         else:
-            edge_weights[(u, v, key)] = -1  # peso -1 se non trovato
+            edge_weights[(u, v, key)] = -1  # weight -1 if not found
     
-    # Aggiungo i pesi agli archi
+    # Add weights to edges
     edges['weight'] = edges.index.map(edge_weights)
     edges['weight'] = edges['weight'].astype(float)
-    print(f"Archi con peso assegnato: {edges['weight'].notna().sum()} su {len(edges)}")
+    print(f"Edges with assigned weight: {edges['weight'].notna().sum()} out of {len(edges)}")
     return edges
 
 #######################
@@ -172,74 +172,74 @@ def assign_edge_weights(edges, weights_csv="edges_with_estimated_times.csv"):
 
 
 def main():
-    # Carico il grafo da file .osm.pbf
-    print(">>> Caricamento grafo da file .osm.pbf...")
+    # Load the graph from .osm.pbf file
+    print(">>> Loading graph from .osm.pbf file...")
     script_dir = os.path.dirname(os.path.abspath(__file__))
     pbf_path = os.path.join(script_dir, "osrm", "bologna-2018.osm.pbf")
 
-    # Leggo il grafo stradale
+    # Read the road graph
     osm = OSM(pbf_path)
 
-    # Tag essenziali per ciclabilità: riduci gli attributi per risparmiare memoria
+    # Essential tags for cycling: reduce attributes to save memory
     extra_attrs = ["oneway", "highway", "cycleway", "bicycle"]
 
-    # Carico archi e nodi
-    print(">>> Caricamento archi e nodi...")
+    # Load edges and nodes
+    print(">>> Loading edges and nodes...")
     nodes, edges = osm.get_network(
         network_type="cycling",
         extra_attributes=extra_attrs,
         nodes=True
     )
     
-    # Normalizzo nodi e archi
-    print(">>> Normalizzazione nodi e archi...")
+    # Normalize nodes and edges
+    print(">>> Normalizing nodes and edges...")
     nodes, edges = normalize_nodes_and_edges(nodes, edges)
     
-    # Carico il grafo con osmnx, semplifico il grafo per non avere nodi intermedi, come nella segmentazione all'inizio
-    print(">>> Creazione grafo con osmnx...")
+    # Load the graph with osmnx, simplify the graph to remove intermediate nodes, as in the initial segmentation
+    print(">>> Creating graph with osmnx...")
     graph = ox.graph_from_gdfs(nodes, edges)
     graph = ox.simplify_graph(graph)
     
-    # Riprendo gli archi e nodi dal grafo semplificato, così non ho nodi intermedi
-    # Se non viene fatto vengono considerati anche i nodi intermedi e quindi non corrispondono con i segmenti
-    print(">>> Estrazione nodi e archi dal grafo semplificato...")
+    # Retrieve edges and nodes from the simplified graph, so there are no intermediate nodes
+    # If not done, intermediate nodes are considered and do not match the segments
+    print(">>> Extracting nodes and edges from the simplified graph...")
     nodes, edges = ox.graph_to_gdfs(graph)
     
-    # Considero vera direzionalità bici
-    print(">>> Direzionalità bici da 4 tag (oneway/highway/cycleway/bicycle)...")
+    # Consider true bike directionality
+    print(">>> Bike directionality from 4 tags (oneway/highway/cycleway/bicycle)...")
     edges = make_bike_directed_edges(edges)
  
-    # Assegno i pesi agli archi in base al file CSV   
+    # Assign weights to edges based on the CSV file   
     edges = assign_edge_weights(edges)
-    # Rimuovo archi senza peso (-1)
+    # Remove edges without weight (-1)
     edges = edges[edges['weight'] >= 0].copy()
     
-    # Esempio di arco con peso
+    # Example of an edge with weight
     example_edge = edges[edges['weight'] < float('inf')].iloc[0]
-    print(f"Esempio di arco con peso: u={example_edge.name[0]}, v={example_edge.name[1]}, weight={example_edge['weight']:.2f} s")
+    print(f"Example of an edge with weight: u={example_edge.name[0]}, v={example_edge.name[1]}, weight={example_edge['weight']:.2f} s")
     
-    # Salvo in un csv i nodi u, v in ordine di osmid con informazione bidirezionalità
-    print(">>> Salvo i nodi in nodi_grafo.csv...")
+    # Save nodes u, v in osmid order with bidirectionality information
+    print(">>> Saving nodes in nodes_graph.csv...")
     edges_df = edges.reset_index()[['u','v','key']].drop_duplicates().sort_values(['u','v','key']).copy()
     
-    # Creo un set di tutte le coppie (u,v) per verificare rapidamente l'esistenza
+    # Create a set of all pairs (u,v) to quickly verify existence
     edge_set = set(zip(edges_df['u'], edges_df['v'], edges_df['key']))
     
-    # Aggiungo la colonna bidirectional che indica se esiste anche (v,u)
+    # Add the bidirectional column indicating if (v,u) also exists
     edges_df['bidirectional'] = edges_df.apply(
         lambda row: (row['v'], row['u'], row['key']) in edge_set, axis=1
     )
     
-    # Ricreo il grafo con gli attributi dentro
+    # Recreate the graph with attributes inside
     graph = ox.graph_from_gdfs(nodes, edges)
     
-    # Salvo il grafo in formato GraphML
-    ox.save_graphml(graph, "grafo.graphml")
-    print(">>> Salvato: grafo.graphml")
+    # Save the graph in GraphML format
+    ox.save_graphml(graph, "bologna_graph.graphml")
+    print(">>> Saved: bologna_graph.graphml")
 
-    # Salvo il csv
-    edges_df.to_csv("nodi_grafo.csv", index=False)
-    print(">>> Salvato: nodi_grafo.csv")
+    # Save the CSV
+    edges_df.to_csv("nodes_graph.csv", index=False)
+    print(">>> Saved: nodes_graph.csv")
 
 
 
