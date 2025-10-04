@@ -100,6 +100,10 @@ def plot_hourly(outdir: Path, starts: pd.DataFrame):
     s["Hour"] = s["Start"].dt.hour
     s["IsWeekend"] = s["Start"].dt.weekday >= 5
 
+    # Calculate the number of weekdays and weekends in the dataset
+    num_weekdays = s[~s['IsWeekend']]['Start'].dt.normalize().nunique()
+    num_weekends = s[s['IsWeekend']]['Start'].dt.normalize().nunique()
+
     # Ensure all 24 hours are present
     hours = pd.Index(range(24), name="Hour")
     hourly = (
@@ -110,13 +114,17 @@ def plot_hourly(outdir: Path, starts: pd.DataFrame):
          .reindex(hours, fill_value=0)
     )
 
+    # Convert totals to averages
+    hourly["Weekday"] = hourly["Weekday"] / num_weekdays
+    hourly["Weekend"] = hourly["Weekend"] / num_weekends
+
     fig, ax = plt.subplots(figsize=(10, 5))
     ax.plot(hourly.index, hourly["Weekday"], "-o", label="Weekday")
     ax.plot(hourly.index, hourly["Weekend"], "-s", label="Weekend")
 
-    ax.set_title("Trips per Hour: Weekday vs Weekend", pad=8)
+    ax.set_title("Average Trips per Hour: Weekday vs Weekend", pad=8)
     ax.set_xlabel("Hour of Day")
-    ax.set_ylabel("Number of Trips")
+    ax.set_ylabel("Average Number of Trips")
 
     # Show all ticks from 0 to 23
     ax.set_xticks(range(24))  
