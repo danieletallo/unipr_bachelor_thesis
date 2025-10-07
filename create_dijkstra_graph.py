@@ -77,6 +77,18 @@ def _highway_vals(d):
 def _invert_geom(g):
     return LineString(list(g.coords)[::-1]) if isinstance(g, LineString) else g
 
+def _has_cycleway_any(ed):
+    # consider any non-empty cycleway tag that is not 'no'
+    for k in ("cycleway", "cycleway:left", "cycleway:right", "cycleway:both"):
+        v = ed.get(k)
+        if v is not None and str(v).strip().lower() not in ("", "no"):
+            return True
+    # also highway=cycleway
+    hw = ed.get("highway")
+    if isinstance(hw, str) and hw.strip().lower() == "cycleway":
+        return True
+    return False
+
 def _bike_dir_from_basic_tags(ed):
     """
     Use ONLY: oneway, highway, cycleway, bicycle.
@@ -90,8 +102,7 @@ def _bike_dir_from_basic_tags(ed):
         return "none"
 
     # cycleway=opposite* → bidirectional for bikes
-    cyc = _val(ed, "cycleway")
-    if "opposite" in cyc:
+    if _has_cycleway_any(ed):
         return "both"
 
     # Generic oneway
@@ -236,6 +247,9 @@ def main():
     # Save the graph in GraphML format
     ox.save_graphml(graph, "bologna_graph.graphml")
     print(">>> Saved: bologna_graph.graphml")
+    
+    # Print graph info
+    print(f"Graph has {len(nodes)} nodes and {len(edges)} edges after processing.")
 
     # Save the CSV
     edges_df.to_csv("nodes_graph.csv", index=False)

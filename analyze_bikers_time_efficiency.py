@@ -14,8 +14,8 @@ df["over_pct"] = (df["Time_s"] - df["DijkstraTime_s"]) / df["DijkstraTime_s"] * 
 
 # 4) Actual minutes and bins
 df["real_minutes"] = (df["Time_s"] // 60).astype(int)
-bins = [0, 5, 10, 15, 20, 30, 45, 60, 90, 120, np.inf]
-labels = ["0–<5", "5–<10", "10–<15", "15–<20", "20–<30", "30–<45", "45–<60", "60–<90", "90–<120", ">=120"]
+bins = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60]
+labels = ["0-5", "5-10", "10-15", "15-20", "20-25", "25-30", "30-35", "35-40", "40-45", "45-50", "50-55", "55-60"]
 df["duration_bin"] = pd.cut(df["real_minutes"], bins=bins, labels=labels, right=False)
 
 # 5) Summary by bin: count, mean, and median
@@ -30,6 +30,6 @@ summary = (df.groupby("duration_bin")
              .reset_index())
 
 # 6) Save and display
-summary.to_csv("efficiency_by_duration_bins.csv", index=False)
+summary.to_csv("efficiency_by_duration_bins_under60_by5.csv", index=False)
 print(summary)
 print("\nSaved in efficiency_by_duration_bins.csv")
