@@ -70,25 +70,75 @@ def is_same_direction(edge_geom, gps_segment, u, v, G):
     return np.dot(get_direction(edge_vec), get_direction(gps_vec)) > 0.5
 
 # Checks if the edge is legal for cycling
-def check_legality(edge_data, gps_segment, u, v, G):
-    # Checks if the segment has a cycleway (i.e., if one of the tags is present and valued)
-    has_cycleway = any(edge_data.get(tag) not in [None, '', 'no'] for tag in ["cycleway", "cycleway:right", "cycleway:left", "cycleway:both"])
-    if edge_data.get("highway") == "cycleway":
-        has_cycleway = True
+# def check_legality(edge_data, gps_segment, u, v, G):
+#     # Checks if the segment has a cycleway (i.e., if one of the tags is present and valued)
+#     has_cycleway = any(edge_data.get(tag) not in [None, '', 'no'] for tag in ["cycleway", "cycleway:right", "cycleway:left", "cycleway:both"])
+#     if edge_data.get("highway") == "cycleway":
+#         has_cycleway = True
 
-    # If it has a cycleway, it is always legal
-    if has_cycleway:
+#     # If it has a cycleway, it is always legal
+#     if has_cycleway:
+#         return True, True
+
+#     # Otherwise, calculate direction and legality based on the direction of travel
+#     oneway = edge_data.get("oneway", False)
+#     geometry = edge_data.get("geometry")
+#     if geometry is None or len(gps_segment) < 2:
+#         return False, has_cycleway
+#     same = is_same_direction(geometry, gps_segment, u, v, G)
+#     if oneway in ["yes", True, "True", 1, "1"]:
+#         legal = same
+#     elif oneway == "-1":
+#         legal = not same
+#     else:
+#         legal = True
+
+#     return legal, has_cycleway
+
+
+def _val(ed, key):
+    """Ritorna il valore normalizzato (stringa minuscola o '' se mancante)."""
+    v = ed.get(key)
+    if isinstance(v, list):  # dopo simplify può essere una lista di valori
+        v = v[0] if v else None
+    return str(v).lower() if v is not None else ""
+
+def check_legality(edge_data, gps_segment, u, v, G):
+    # --- Raccogli tutti i tag ciclabili ---
+    cyc   = _val(edge_data, "cycleway")
+    cyc_l = _val(edge_data, "cycleway:left")
+    cyc_r = _val(edge_data, "cycleway:right")
+    cyc_b = _val(edge_data, "cycleway:both")
+    hw    = _val(edge_data, "highway")
+
+    # --- Flag: esiste almeno una forma di infrastruttura ciclabile ---
+    has_cycleway = any(v not in ("", "no", "none", "false") for v in (cyc, cyc_l, cyc_r, cyc_b)) or hw == "cycleway"
+
+    # --- 1. Casi veramente bidirezionali ---
+    # pista dedicata (non oneway)
+    if hw == "cycleway" and _val(edge_data, "oneway") not in {"yes", "1", "true"}:
         return True, True
 
-    # Otherwise, calculate direction and legality based on the direction of travel
-    oneway = edge_data.get("oneway", False)
+    # corsie opposte o bidirezionali (qualunque tag con "opposite" o cycleway:both valido)
+    if any("opposite" in v for v in (cyc, cyc_l, cyc_r)) or cyc_b not in ("", "no", "none", "false"):
+        return True, True
+
+    # --- 2. Altri casi: controlla direzione ---
     geometry = edge_data.get("geometry")
     if geometry is None or len(gps_segment) < 2:
         return False, has_cycleway
+
     same = is_same_direction(geometry, gps_segment, u, v, G)
-    if oneway in ["yes", True, "True", 1, "1"]:
+    ow_bike = _val(edge_data, "oneway:bicycle")
+    ow = _val(edge_data, "oneway")
+
+    if ow_bike in {"yes", "1", "true"}:
         legal = same
-    elif oneway == "-1":
+    elif ow_bike == "-1":
+        legal = not same
+    elif ow in {"yes", "1", "true"}:
+        legal = same
+    elif ow == "-1":
         legal = not same
     else:
         legal = True
@@ -126,7 +176,12 @@ if __name__ == '__main__':
     osm = OSM(pbf_path)    
 
     # Essential tags for cycling: reduce attributes to save memory
-    extra_attrs = ["oneway", "highway",  "cycleway", "bicycle"]
+    extra_attrs = [
+        "oneway", "oneway:bicycle", "bicycle", "highway",
+        "cycleway", "cycleway:left", "cycleway:right", "cycleway:both",
+        "cycleway:left:oneway", "cycleway:right:oneway"
+    ]
+
 
     print("Loading OSM graph from historical PBF (Bologna 2018)... -- 4")
 
@@ -250,5 +305,5 @@ if __name__ == '__main__':
 
     # -------- Export --------
     out = pd.DataFrame(all_segments)
-    out.to_csv(os.path.join(script_dir,'segments_all_activities_REMAKE.csv'),index=False)
-    print(f"Exported 'segments_all_activities_REMAKE.csv' with {len(all_segments)} segments.")
+    out.to_csv(os.path.join(script_dir,'segments_all_activities_2.csv'),index=False)
+    print(f"Exported 'segments_all_activities_2.csv' with {len(all_segments)} segments.")

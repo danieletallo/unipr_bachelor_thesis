@@ -31,7 +31,7 @@ agg["LegalPct"] = np.where(
 )
 
 # --- Get the top 10 edges by IllegalDistance_m ---
-critical = agg.sort_values("IllegalDistance_m", ascending=False).head(10)
+critical = agg.sort_values("IllegalDistance_m", ascending=False).head(11)
 
 # --- Save to CSV ---
 critical.to_csv("critical_edges.csv", index=False)

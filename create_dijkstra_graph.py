@@ -59,9 +59,6 @@ def normalize_nodes_and_edges(nodes, edges):
 # ------------------------------
 FORBIDDEN_HW = {"motorway", "motorway_link"}  # remove highways and ramps
 
-def _val(d, k):
-    """Read tags as normalized strings."""
-    return str(d.get(k, "")).strip().lower()
 
 def _highway_vals(d):
     """Handle highway as string, list, or 'a;b'."""
@@ -77,42 +74,63 @@ def _highway_vals(d):
 def _invert_geom(g):
     return LineString(list(g.coords)[::-1]) if isinstance(g, LineString) else g
 
-def _has_cycleway_any(ed):
-    # consider any non-empty cycleway tag that is not 'no'
-    for k in ("cycleway", "cycleway:left", "cycleway:right", "cycleway:both"):
-        v = ed.get(k)
-        if v is not None and str(v).strip().lower() not in ("", "no"):
-            return True
-    # also highway=cycleway
-    hw = ed.get("highway")
-    if isinstance(hw, str) and hw.strip().lower() == "cycleway":
-        return True
-    return False
+def _val(d, k):
+    """Valore normalizzato (gestisce liste post-simplify)."""
+    v = d.get(k)
+    if isinstance(v, list):
+        v = v[0] if v else None
+    return (str(v).strip().lower() if v is not None else "")
+
 
 def _bike_dir_from_basic_tags(ed):
     """
-    Use ONLY: oneway, highway, cycleway, bicycle.
-    Returns: 'none' | 'forward' | 'backward' | 'both'
-    - 'forward' means direction u->v of the original row.
+    Usa: oneway, oneway:bicycle, highway, cycleway, cycleway:left/right/both, bicycle.
+    Ritorna: 'none' | 'forward' | 'backward' | 'both'
     """
-    # Stop if bikes are forbidden
+    # bici vietate?
     if _val(ed, "bicycle") in {"no", "dismount"}:
         return "none"
     if _highway_vals(ed) & FORBIDDEN_HW:
         return "none"
 
-    # cycleway=opposite* → bidirectional for bikes
-    if _has_cycleway_any(ed):
+    hw      = _val(ed, "highway")
+    cyc     = _val(ed, "cycleway")
+    cyc_l   = _val(ed, "cycleway:left")
+    cyc_r   = _val(ed, "cycleway:right")
+    cyc_b   = _val(ed, "cycleway:both")
+    ow      = _val(ed, "oneway")
+    ow_bike = _val(ed, "oneway:bicycle")
+
+    # 1) pista dedicata → bidirezionale salvo oneway esplicito
+    if hw == "cycleway":
+        if ow in {"yes", "1", "true"} or ow_bike in {"yes", "1", "true"}:
+            return "forward"
+        if ow == "-1" or ow_bike == "-1":
+            return "backward"
         return "both"
 
-    # Generic oneway
-    ow = _val(ed, "oneway")
-    if ow in {"yes", "1", "true"} or ed.get("oneway") is True or ed.get("oneway") == 1:
+    # 2) opposte o "both" (qualunque tag con 'opposite*' o cycleway:both valido) → bidirezionale
+    def has_opposite(s): 
+        return any(tok in s for tok in ("opposite", "opposite_lane", "opposite_track", "opposite_share_busway"))
+    if any(has_opposite(s) for s in (cyc, cyc_l, cyc_r)):
+        return "both"
+    if cyc_b not in ("", "no", "none", "false"):
+        return "both"
+
+    # 3) altrimenti oneway (precedenza a oneway:bicycle)
+    if ow_bike in {"yes", "1", "true"}:
+        return "forward"
+    if ow_bike == "-1":
+        return "backward"
+
+    if ow in {"yes", "1", "true"}:
         return "forward"
     if ow == "-1":
         return "backward"
-    # Otherwise bidirectional
+
+    # 4) bidirezionale generico
     return "both"
+
 
 def make_bike_directed_edges(edges):
     """
@@ -192,7 +210,11 @@ def main():
     osm = OSM(pbf_path)
 
     # Essential tags for cycling: reduce attributes to save memory
-    extra_attrs = ["oneway", "highway", "cycleway", "bicycle"]
+    extra_attrs = [
+        "oneway", "oneway:bicycle", "bicycle", "highway",
+        "cycleway", "cycleway:left", "cycleway:right", "cycleway:both"
+    ]
+
 
     # Load edges and nodes
     print(">>> Loading edges and nodes...")

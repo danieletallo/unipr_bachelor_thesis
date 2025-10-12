@@ -6,7 +6,7 @@ import pandas as pd
 
 output_file = "edges_with_estimated_times.csv"
 segments = pd.read_csv(
-    "segments_all_activities.csv",
+    "segments_all_activities_2.csv",
     usecols=["ActivityId", "IsLegal", "Node_From", "Node_To", "Key", "ExpectedTime_s", "PercentageTraveled", "EdgeLength_m"]
 )
 

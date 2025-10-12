@@ -7,7 +7,7 @@ from collections import Counter
 
 # Load the CSV file
 script_dir = os.path.dirname(os.path.abspath(__file__))
-csv_path = os.path.join(script_dir, "segments_all_activities.csv")
+csv_path = os.path.join(script_dir, "segments_all_activities_2.csv")
 df = pd.read_csv(csv_path)
 
 # Count how many unique ActivityIds there are
