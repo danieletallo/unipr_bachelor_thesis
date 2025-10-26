@@ -61,7 +61,7 @@ def plot_daily_distribution(outdir: Path, starts: pd.DataFrame):
     fig, ax = plt.subplots(figsize=(12, 5))
     ax.plot(daily.index, daily.values, "-o", ms=2, lw=0.9, label="Daily count")
 
-    ax.set_title("Daily Activity Count (Apr–Oct 2017)", pad=10)
+    # ax.set_title("Daily Activity Count (Apr–Oct 2017)", pad=10)
     ax.set_xlabel("Month")
     ax.set_ylabel("Count")
     ax.set_ylim(bottom=0)
@@ -122,7 +122,7 @@ def plot_hourly(outdir: Path, starts: pd.DataFrame):
     ax.plot(hourly.index, hourly["Weekday"], "-o", label="Weekday")
     ax.plot(hourly.index, hourly["Weekend"], "-s", label="Weekend")
 
-    ax.set_title("Average Trips per Hour: Weekday vs Weekend", pad=8)
+    # ax.set_title("Average Trips per Hour: Weekday vs Weekend", pad=8)
     ax.set_xlabel("Hour of Day")
     ax.set_ylabel("Average Number of Trips")
 
